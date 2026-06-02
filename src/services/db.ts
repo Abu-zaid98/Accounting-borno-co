@@ -188,6 +188,64 @@ const initLocalStorage = () => {
 initLocalStorage();
 
 // ==========================================
+// رفع البيانات الافتراضية إلى Firebase (عند أول تشغيل)
+// ==========================================
+const seedFirebase = async () => {
+  if (!isFirebaseConfigured || !rtdb) return;
+  try {
+    // تحقق من وجود مستخدمين في Firebase
+    const usersSnap = await get(ref(rtdb, 'users'));
+    if (!usersSnap.exists() || Object.keys(usersSnap.val() || {}).length === 0) {
+      console.log('🌱 Firebase فارغ — رفع البيانات الافتراضية...');
+      // رفع المستخدمين الافتراضيين
+      const usersMap: Record<string, UserDocument> = {};
+      DEFAULT_USERS.forEach(u => { usersMap[u.uid] = u; });
+      await set(ref(rtdb, 'users'), usersMap);
+      console.log('✅ تم رفع المستخدمين الافتراضيين إلى Firebase.');
+    }
+
+    // تحقق من وجود إعدادات
+    const settingsSnap = await get(ref(rtdb, 'settings/general'));
+    if (!settingsSnap.exists()) {
+      await set(ref(rtdb, 'settings/general'), DEFAULT_SETTINGS);
+      console.log('✅ تم رفع الإعدادات الافتراضية إلى Firebase.');
+    }
+
+    // تحقق من وجود أقسام
+    const deptsSnap = await get(ref(rtdb, 'departments'));
+    if (!deptsSnap.exists() || Object.keys(deptsSnap.val() || {}).length === 0) {
+      const deptsMap: Record<string, DepartmentDocument> = {};
+      DEFAULT_DEPARTMENTS.forEach(d => { deptsMap[d.id] = d; });
+      await set(ref(rtdb, 'departments'), deptsMap);
+      console.log('✅ تم رفع الأقسام الافتراضية إلى Firebase.');
+    }
+
+    // تحقق من وجود صلاحيات
+    const permsSnap = await get(ref(rtdb, 'permissions'));
+    if (!permsSnap.exists() || Object.keys(permsSnap.val() || {}).length === 0) {
+      const permsMap: Record<string, PermissionDocument> = {};
+      DEFAULT_PERMISSIONS.forEach(p => { permsMap[p.id] = p; });
+      await set(ref(rtdb, 'permissions'), permsMap);
+      console.log('✅ تم رفع الصلاحيات الافتراضية إلى Firebase.');
+    }
+
+    // تحقق من وجود موظفين
+    const empsSnap = await get(ref(rtdb, 'employees'));
+    if (!empsSnap.exists() || Object.keys(empsSnap.val() || {}).length === 0) {
+      const empsMap: Record<string, EmployeeDocument> = {};
+      DEFAULT_EMPLOYEES.forEach(e => { empsMap[e.id] = e; });
+      await set(ref(rtdb, 'employees'), empsMap);
+      console.log('✅ تم رفع الموظفين الافتراضيين إلى Firebase.');
+    }
+  } catch (err) {
+    console.warn('⚠️ فشل رفع البيانات الافتراضية إلى Firebase:', err);
+  }
+};
+
+// تشغيل عملية الـ seed عند بدء التطبيق
+seedFirebase();
+
+// ==========================================
 // Helpers
 // ==========================================
 const snapToArray = <T>(snap: { val: () => Record<string, T> | null }): T[] => {

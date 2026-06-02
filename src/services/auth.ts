@@ -86,6 +86,7 @@ export const authService = {
         const code = (error as { code?: string }).code ?? '';
         const message = (error as { message?: string }).message ?? '';
 
+        // خطأ الشبكة — دخول محلي
         const isNetworkError =
           code === 'auth/network-request-failed' ||
           code === 'auth/too-many-requests' ||
@@ -95,25 +96,41 @@ export const authService = {
           return this._localLogin(email, password, rememberMe);
         }
 
-        if (message.includes('تم تعطيل') || message.includes('لم يتم العثور')) {
-          throw error;
-        }
-
-        if (code === 'auth/user-not-found' || code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
-          const users = await dbService.getUsers();
-          const matched = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-          if (matched && matched.status === 'active' && canLoginLocally(matched, password)) {
-            const store = rememberMe ? localStorage : sessionStorage;
-            store.setItem('arbahy_user', JSON.stringify(matched));
-            return matched;
-          }
-          throw new Error('البريد الإلكتروني أو كلمة المرور غير صحيحة.');
-        }
+        // حساب معطل
         if (code === 'auth/user-disabled') {
           throw new Error('تم تعطيل هذا الحساب من قبل الإدارة.');
         }
 
-        // تراجع للوضع المحلي لأي خطأ آخر
+        // أي حالة فشل في Firebase Auth (المستخدم غير مسجل في Auth أو كلمة مرور خاطئة)
+        // نتحقق من قاعدة البيانات (RTDB أو محلي) مباشرة
+        const isAuthFailure =
+          code === 'auth/user-not-found' ||
+          code === 'auth/invalid-credential' ||
+          code === 'auth/wrong-password' ||
+          code === 'auth/invalid-email' ||
+          code === 'auth/email-not-found' ||
+          code === 'auth/operation-not-allowed' ||
+          code.startsWith('auth/');
+
+        if (isAuthFailure) {
+          // ابحث في RTDB/localStorage
+          const users = await dbService.getUsers();
+          const matched = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+          if (!matched) {
+            throw new Error('البريد الإلكتروني المدخل غير مسجل لدينا.');
+          }
+          if (matched.status === 'disabled') {
+            throw new Error('تم تعطيل حسابك من قبل الإدارة. يرجى التواصل مع المسؤول.');
+          }
+          if (!canLoginLocally(matched, password)) {
+            throw new Error('كلمة المرور المدخلة غير صحيحة.');
+          }
+          const store = rememberMe ? localStorage : sessionStorage;
+          store.setItem('arbahy_user', JSON.stringify(matched));
+          return matched;
+        }
+
+        // أي خطأ آخر — تراجع للوضع المحلي
         return this._localLogin(email, password, rememberMe);
       }
     }

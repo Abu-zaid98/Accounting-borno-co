@@ -1,0 +1,76 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@200..1000&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Cairo', system-ui, -apple-system, sans-serif;
+  
+  /* Harmonious luxury color palette for premium gift & wrapping shop */
+  --color-brand-50: #fbf7f8;
+  --color-brand-100: #f7eff0;
+  --color-brand-200: #eedfe2;
+  --color-brand-300: #dec4cb;
+  --color-brand-400: #c99fb0;
+  --color-brand-500: #b07892;
+  --color-brand-600: #975b75;
+  --color-brand-700: #7d485e;
+  --color-brand-800: #683d4f;
+  --color-brand-900: #573544;
+  --color-brand-950: #361e28;
+  
+  --color-gold-50: #fdfbf7;
+  --color-gold-100: #faf4e6;
+  --color-gold-200: #f3e5c4;
+  --color-gold-300: #e8ce97;
+  --color-gold-400: #dbae64;
+  --color-gold-500: #ce923d;
+  --color-gold-600: #be7a31;
+  --color-gold-700: #9e5f28;
+  --color-gold-800: #804b24;
+  --color-gold-900: #683f20;
+  --color-gold-950: #3c200f;
+}
+
+html, body {
+  font-family: 'Cairo', sans-serif;
+  direction: rtl;
+  text-align: right;
+  background-color: #faf9f6; /* Ivory / Cream warm color background */
+  color: #2b2528;
+  margin: 0;
+  padding: 0;
+  min-height: 100svh;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #dec4cb;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #c99fb0;
+}
+
+/* Print utilities */
+@media print {
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  @page {
+    size: A4;
+    margin: 1.5cm;
+  }
+}

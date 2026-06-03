@@ -1,195 +1,123 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as zod from 'zod';
 import { motion } from 'framer-motion';
-import { Gift, Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
-
-const loginSchema = zod.object({
-  email: zod.string().min(1, 'البريد الإلكتروني مطلوب').email('صيغة البريد الإلكتروني غير صحيحة'),
-  password: zod.string().min(6, 'كلمة المرور يجب أن لا تقل عن 6 أحرف'),
-  rememberMe: zod.boolean().optional(),
-});
-
-type LoginFormFields = zod.infer<typeof loginSchema>;
+import { Gift, Lock, User, ArrowRight, Loader2 } from 'lucide-react';
 
 export const Login: React.FC = () => {
-  const { login } = useAuth();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const { login, isLoading, error, clearError } = useAuth();
   const navigate = useNavigate();
-  const [showPassword, setShowPassword] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<LoginFormFields>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: '',
-      password: '',
-      rememberMe: false,
-    },
-  });
-
-  const onSubmit = async (data: LoginFormFields) => {
-    setLoading(true);
-    setServerError(null);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username || !password) return;
     try {
-      await login(data.email, data.password, data.rememberMe);
-      navigate('/dashboard');
-    } catch (err: any) {
-      console.error(err);
-      setServerError(err.message || 'حدث خطأ غير متوقع أثناء تسجيل الدخول.');
-    } finally {
-      setLoading(false);
+      await login(username, password);
+      navigate('/dashboard', { replace: true });
+    } catch (err) {
+      // Error is handled in context and displayed automatically
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-radial from-brand-50 via-brand-100 to-brand-200/50 p-4 md:p-6 lg:p-8 font-sans">
+    <div className="min-h-screen relative flex items-center justify-center overflow-hidden bg-slate-950">
+      {/* Background Effects */}
+      <div className="absolute inset-0 z-0">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-yellow-500/20 rounded-full blur-3xl mix-blend-screen animate-pulse" />
+        <div className="absolute bottom-1/4 right-1/4 w-[30rem] h-[30rem] bg-indigo-600/20 rounded-full blur-3xl mix-blend-screen animate-pulse" style={{ animationDelay: '2s' }} />
+      </div>
+
       <motion.div 
-        initial={{ opacity: 0, y: 30 }}
+        initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: 'easeOut' }}
-        className="max-w-5xl w-full bg-white/85 backdrop-blur-md rounded-3xl shadow-2xl border border-white/40 overflow-hidden flex flex-col md:flex-row min-h-[600px]"
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        className="z-10 w-full max-w-md p-8"
       >
-        {/* Left Side: Aesthetic Brand Promo (Hidden on Mobile) */}
-        <div className="hidden md:flex md:w-1/2 bg-gradient-to-br from-brand-950 via-brand-900 to-brand-950 p-12 flex-col justify-between relative overflow-hidden">
-          {/* Ornamental backgrounds */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-gold-400/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-          <div className="absolute bottom-0 left-0 w-80 h-80 bg-brand-500/10 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4"></div>
-          
-          <div className="flex items-center gap-3 relative z-10">
-            <div className="w-10 h-10 rounded-xl bg-gold-400 flex items-center justify-center text-brand-950 shadow-lg">
-              <Gift size={22} />
-            </div>
-            <span className="font-bold text-xl text-white tracking-wider">البورنو</span>
-          </div>
+        <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
+          {/* Subtle gradient border effect */}
+          <div className="absolute inset-0 border-2 border-transparent rounded-3xl bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
 
-          <div className="my-auto relative z-10 space-y-6">
-            <h1 className="text-4xl font-extrabold text-white leading-tight">
-              نظام المحاسبة <br />
-              <span className="text-gold-300 font-bold">المتكامل لإدارة الهدايا</span>
-            </h1>
-            <p className="text-brand-200 text-sm leading-relaxed max-w-md">
-              الخيار الاحترافي الأول لمتاجر الهدايا والتغليفات الراقية. إدارة ملفات الموظفين، الحضور والانصراف، احتساب الساعات الإضافية التلقائي، وإصدار مسيرات الرواتب بكشوف معتمدة A4 بضغطة زر.
-            </p>
-          </div>
-
-          <div className="relative z-10 text-xs text-brand-300 flex items-center gap-1">
-            <span>جميع الحقوق محفوظة © {new Date().getFullYear()} Eng.Mohammed ElJoujo</span>
-          </div>
-        </div>
-
-        {/* Right Side: Login Form */}
-        <div className="w-full md:w-1/2 p-8 md:p-12 lg:p-16 flex flex-col justify-center bg-white">
-          <div className="mb-8 text-center md:text-right">
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">مرحباً بك مجدداً</h2>
-            <p className="text-gray-400 text-sm">سجل دخولك لمتابعة شؤون متجرك المالية والإدارية</p>
-          </div>
-
-          {serverError && (
+          {/* Logo Section */}
+          <div className="flex flex-col items-center mb-10">
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="mb-6 p-4 bg-red-50 border-r-4 border-red-500 rounded-xl flex items-start gap-3 text-red-700 text-xs leading-relaxed"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
+              className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-yellow-600 to-yellow-400 flex items-center justify-center shadow-lg shadow-yellow-500/30 mb-4"
             >
-              <AlertCircle size={18} className="shrink-0 mt-0.5" />
-              <span>{serverError}</span>
+              <Gift className="text-slate-900 w-8 h-8" />
             </motion.div>
-          )}
+            <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-500 mb-1">
+              البورنو المحاسبي
+            </h1>
+            <p className="text-slate-300/80 text-sm tracking-widest mt-1">النظام الإداري والمالي الفاخر</p>
+          </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            {/* Email Field */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-gray-600">البريد الإلكتروني</label>
-              <div className="relative">
-                <span className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 pointer-events-none">
-                  <Mail size={16} />
-                </span>
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <motion.div 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-center"
+              >
+                <p className="text-red-400 text-sm font-medium">{error}</p>
+              </motion.div>
+            )}
+
+            <div className="space-y-4">
+              <div className="relative group">
+                <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                  <User className="h-5 w-5 text-slate-400 group-focus-within:text-yellow-400 transition-colors" />
+                </div>
                 <input
-                  type="email"
-                  dir="ltr"
-                  placeholder="admin@arbahy.com"
-                  className={`w-full py-3 pr-11 pl-4 bg-gray-50/80 border rounded-xl text-sm transition-all focus:outline-hidden focus:ring-2 focus:ring-brand-500 focus:bg-white text-right
-                    ${errors.email ? 'border-red-400' : 'border-gray-200 focus:border-brand-500'}
-                  `}
-                  {...register('email')}
+                  type="text"
+                  value={username}
+                  onChange={(e) => { setUsername(e.target.value); clearError(); }}
+                  className="w-full bg-black/20 border border-white/10 rounded-xl py-3.5 pr-12 pl-4 text-white placeholder-slate-400/50 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500/50 transition-all text-right"
+                  placeholder="اسم المستخدم"
+                  dir="rtl"
+                  required
                 />
               </div>
-              {errors.email && (
-                <p className="text-red-500 text-[10px] pr-1">{errors.email.message}</p>
-              )}
-            </div>
 
-            {/* Password Field */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-gray-600">كلمة المرور</label>
-              <div className="relative">
-                <span className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 pointer-events-none">
-                  <Lock size={16} />
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-gray-400 hover:text-brand-500 transition-all cursor-pointer"
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+              <div className="relative group">
+                <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-slate-400 group-focus-within:text-yellow-400 transition-colors" />
+                </div>
                 <input
-                  type={showPassword ? 'text' : 'password'}
-                  dir="ltr"
-                  placeholder="••••••••"
-                  className={`w-full py-3 pr-11 pl-11 bg-gray-50/80 border rounded-xl text-sm transition-all focus:outline-hidden focus:ring-2 focus:ring-brand-500 focus:bg-white text-right
-                    ${errors.password ? 'border-red-400' : 'border-gray-200 focus:border-brand-500'}
-                  `}
-                  {...register('password')}
+                  type="password"
+                  value={password}
+                  onChange={(e) => { setPassword(e.target.value); clearError(); }}
+                  className="w-full bg-black/20 border border-white/10 rounded-xl py-3.5 pr-12 pl-4 text-white placeholder-slate-400/50 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500/50 transition-all text-right"
+                  placeholder="كلمة المرور"
+                  dir="rtl"
+                  required
                 />
               </div>
-              {errors.password && (
-                <p className="text-red-500 text-[10px] pr-1">{errors.password.message}</p>
-              )}
             </div>
 
-            {/* Remember Me & Help */}
-            <div className="flex items-center justify-between text-xs pt-1">
-              <label className="flex items-center gap-2 text-gray-500 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  className="w-4.5 h-4.5 rounded-sm border-gray-300 text-brand-600 focus:ring-brand-500"
-                  {...register('rememberMe')}
-                />
-                <span>تذكرني على هذا الجهاز</span>
-              </label>
-            </div>
-
-            {/* Submit Button */}
             <button
               type="submit"
-              disabled={loading}
-              className="w-full py-3.5 px-4 bg-gradient-to-l from-brand-700 to-brand-600 hover:from-brand-800 hover:to-brand-700 text-white rounded-xl font-bold text-sm transition-all shadow-md hover:shadow-lg focus:outline-hidden focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              disabled={isLoading || !username || !password}
+              className="w-full relative group overflow-hidden rounded-xl bg-gradient-to-r from-yellow-600 to-yellow-400 text-slate-950 font-bold py-3.5 px-4 shadow-lg shadow-yellow-500/20 hover:shadow-yellow-500/40 transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              {loading ? (
-                <>
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                  <span>جاري تسجيل الدخول...</span>
-                </>
-              ) : (
-                <span>تسجيل الدخول للنظام</span>
-              )}
+              <div className="absolute inset-0 bg-white/20 group-hover:translate-x-full transition-transform duration-500 ease-out -skew-x-12 -translate-x-full" />
+              <div className="flex items-center justify-center gap-2">
+                {isLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    <span>تسجيل الدخول</span>
+                    <ArrowRight className="w-5 h-5 rotate-180" />
+                  </>
+                )}
+              </div>
             </button>
           </form>
 
-          {/* Quick Login credentials display for demo */}
-          <div className="mt-6 p-4 bg-gray-50 rounded-xl text-xs text-gray-500 text-center">
-            <p>تجريبياً:</p>
-            <p>البريد الإلكتروني: <code className="bg-gray-100 px-1 rounded">admin@gmail.com</code></p>
-            <p>كلمة المرور: <code className="bg-gray-100 px-1 rounded">admin123</code></p>
-          </div>
         </div>
       </motion.div>
     </div>

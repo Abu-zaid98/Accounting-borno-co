@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { dbService } from '../../services/db';
-import { authService } from '../../services/auth';
 import type { PermissionDocument, UserDocument } from '../../types';
 import { Plus, Edit, Trash2, Shield, UserX, UserCheck, X, Check, AlertCircle, KeyRound } from 'lucide-react';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { useToast } from '../../components/ui/Toast';
 import { useAuth } from '../../context/AuthContext';
+import bcrypt from 'bcryptjs';
 
 export const Users: React.FC = () => {
   const { hasPermission, user: currentUser } = useAuth();
@@ -23,10 +23,10 @@ export const Users: React.FC = () => {
 
   // Form states
   const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [role, setRole] = useState<string>('accountant');
+  const [role, setRole] = useState<'super_admin' | 'manager' | 'accountant' | 'employee'>('accountant');
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [newPermissionKey, setNewPermissionKey] = useState('');
@@ -36,36 +36,36 @@ export const Users: React.FC = () => {
   const { showToast } = useToast();
 
   const fallbackPermissions = [
-    { key: 'employees.view', label: 'عرض الموظفين' },
-    { key: 'employees.create', label: 'إضافة موظف' },
-    { key: 'employees.edit', label: 'تعديل موظف' },
-    { key: 'employees.delete', label: 'حذف موظف' },
-    { key: 'salary.view', label: 'عرض الرواتب' },
-    { key: 'salary.create', label: 'توليد كشف رواتب' },
-    { key: 'salary.edit', label: 'تعديل الرواتب يدوياً' },
-    { key: 'salary.delete', label: 'حذف كشوفات الرواتب' },
-    { key: 'salary.approve', label: 'اعتماد وقفل كشوفات الرواتب' },
-    { key: 'salary.pay', label: 'تأكيد صرف كشوفات الرواتب' },
-    { key: 'attendance.view', label: 'عرض سجل الحضور والانصراف' },
-    { key: 'attendance.create', label: 'تسجيل الحضور/الانصراف' },
-    { key: 'attendance.edit', label: 'تعديل سجل الحضور والانصراف' },
-    { key: 'attendance.delete', label: 'حذف سجلات الحضور والانصراف' },
-    { key: 'overtime.view', label: 'عرض الساعات الإضافية' },
-    { key: 'overtime.create', label: 'إضافة ساعات إضافية' },
-    { key: 'overtime.edit', label: 'تعديل/حذف الساعات الإضافية' },
-    { key: 'reports.view', label: 'عرض التقارير' },
-    { key: 'reports.print', label: 'طباعة وتصدير التقارير' },
-    { key: 'settings.view', label: 'عرض الإعدادات العامة' },
-    { key: 'settings.edit', label: 'تعديل الإعدادات والمعادلات' },
-    { key: 'users.view', label: 'عرض مستخدمي النظام' },
-    { key: 'users.create', label: 'إضافة مستخدم جديد' },
-    { key: 'users.edit', label: 'تعديل صلاحيات المستخدمين' },
-    { key: 'users.delete', label: 'حذف المستخدمين' },
-    { key: 'departments.view', label: 'عرض الأقسام' },
-    { key: 'departments.create', label: 'إضافة قسم جديد' },
-    { key: 'departments.edit', label: 'تعديل الأقسام' },
-    { key: 'departments.delete', label: 'حذف الأقسام' },
-    { key: 'dashboard.view', label: 'عرض لوحة القيادة (الرئيسية)' }
+    { id: '1', key: 'employees.view', label: 'عرض الموظفين', category: 'employees' as const },
+    { id: '2', key: 'employees.create', label: 'إضافة موظف', category: 'employees' as const },
+    { id: '3', key: 'employees.edit', label: 'تعديل موظف', category: 'employees' as const },
+    { id: '4', key: 'employees.delete', label: 'حذف موظف', category: 'employees' as const },
+    { id: '5', key: 'salary.view', label: 'عرض الرواتب', category: 'salary' as const },
+    { id: '6', key: 'salary.create', label: 'توليد كشف رواتب', category: 'salary' as const },
+    { id: '7', key: 'salary.edit', label: 'تعديل الرواتب يدوياً', category: 'salary' as const },
+    { id: '8', key: 'salary.delete', label: 'حذف كشوفات الرواتب', category: 'salary' as const },
+    { id: '9', key: 'salary.approve', label: 'اعتماد وقفل كشوفات الرواتب', category: 'salary' as const },
+    { id: '10', key: 'salary.pay', label: 'تأكيد صرف كشوفات الرواتب', category: 'salary' as const },
+    { id: '11', key: 'attendance.view', label: 'عرض سجل الحضور والانصراف', category: 'attendance' as const },
+    { id: '12', key: 'attendance.create', label: 'تسجيل الحضور/الانصراف', category: 'attendance' as const },
+    { id: '13', key: 'attendance.edit', label: 'تعديل سجل الحضور والانصراف', category: 'attendance' as const },
+    { id: '14', key: 'attendance.delete', label: 'حذف سجلات الحضور والانصراف', category: 'attendance' as const },
+    { id: '15', key: 'overtime.view', label: 'عرض الساعات الإضافية', category: 'attendance' as const },
+    { id: '16', key: 'overtime.create', label: 'إضافة ساعات إضافية', category: 'attendance' as const },
+    { id: '17', key: 'overtime.edit', label: 'تعديل/حذف الساعات الإضافية', category: 'attendance' as const },
+    { id: '18', key: 'reports.view', label: 'عرض التقارير', category: 'reports' as const },
+    { id: '19', key: 'reports.print', label: 'طباعة وتصدير التقارير', category: 'reports' as const },
+    { id: '20', key: 'settings.view', label: 'عرض الإعدادات العامة', category: 'settings' as const },
+    { id: '21', key: 'settings.edit', label: 'تعديل الإعدادات والمعادلات', category: 'settings' as const },
+    { id: '22', key: 'users.view', label: 'عرض مستخدمي النظام', category: 'users' as const },
+    { id: '23', key: 'users.create', label: 'إضافة مستخدم جديد', category: 'users' as const },
+    { id: '24', key: 'users.edit', label: 'تعديل صلاحيات المستخدمين', category: 'users' as const },
+    { id: '25', key: 'users.delete', label: 'حذف المستخدمين', category: 'users' as const },
+    { id: '26', key: 'departments.view', label: 'عرض الأقسام', category: 'employees' as const },
+    { id: '27', key: 'departments.create', label: 'إضافة قسم جديد', category: 'employees' as const },
+    { id: '28', key: 'departments.edit', label: 'تعديل الأقسام', category: 'employees' as const },
+    { id: '29', key: 'departments.delete', label: 'حذف الأقسام', category: 'employees' as const },
+    { id: '30', key: 'dashboard.view', label: 'عرض لوحة القيادة (الرئيسية)', category: 'settings' as const }
   ];
 
   const fetchUsers = async () => {
@@ -84,10 +84,11 @@ export const Users: React.FC = () => {
     }
   };
 
-  const availablePermissions = permissions.length > 0 ? permissions : fallbackPermissions.map((p, idx) => ({
-    id: `fallback-${idx}`,
+  const availablePermissions = permissions.length > 0 ? permissions : fallbackPermissions.map((p) => ({
+    id: p.id,
     key: p.key,
     label: p.label,
+    category: p.category,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   }));
@@ -99,7 +100,7 @@ export const Users: React.FC = () => {
   const handleOpenAddModal = () => {
     setEditingUser(null);
     setFullName('');
-    setEmail('');
+    setUsername('');
     setPassword('');
     setConfirmPassword('');
     setRole('accountant');
@@ -113,17 +114,17 @@ export const Users: React.FC = () => {
   const handleOpenEditModal = (u: UserDocument) => {
     setEditingUser(u);
     setFullName(u.fullName);
-    setEmail(u.email);
+    setUsername(u.username || '');
     setPassword('');
     setConfirmPassword('');
     setRole(u.role);
-    setUserPermissions(u.permissions);
+    setUserPermissions(u.permissions || []);
     setErrorMsg(null);
     setIsModalOpen(true);
   };
 
   const handleToggleStatus = async (u: UserDocument) => {
-    const nextStatus = u.status === 'active' ? 'disabled' : 'active';
+    const nextStatus = u.status === 'active' ? 'inactive' : 'active';
     try {
       await dbService.updateUser(u.uid, { status: nextStatus });
       showToast('success', nextStatus === 'active' ? 'تم تفعيل المستخدم' : 'تم تعطيل المستخدم');
@@ -180,6 +181,7 @@ export const Users: React.FC = () => {
       id: `perm_${Date.now()}`,
       key,
       label,
+      category: 'users' as const,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -190,7 +192,7 @@ export const Users: React.FC = () => {
   };
 
   const handleDeletePermission = async (permission: PermissionDocument) => {
-    if (users.some(u => u.permissions.includes(permission.key))) {
+    if (users.some(u => (u.permissions || []).includes(permission.key))) {
       showToast('error', 'لا يمكن حذف صلاحية مرتبطة بمستخدمين');
       return;
     }
@@ -225,7 +227,10 @@ export const Users: React.FC = () => {
       showToast('error', 'كلمة المرور وتأكيدها غير متطابقين');
       return;
     }
-    await authService.changePassword(passwordTarget.uid, resetPassword);
+    
+    const passwordHash = bcrypt.hashSync(resetPassword, 10);
+    await dbService.updateUser(passwordTarget.uid, { passwordHash });
+    
     setPasswordTarget(null);
     showToast('success', 'تم تحديث كلمة المرور', 'يمكن للمستخدم تسجيل الدخول بكلمة المرور الجديدة الآن.');
     await fetchUsers();
@@ -235,7 +240,7 @@ export const Users: React.FC = () => {
     e.preventDefault();
     setErrorMsg(null);
 
-    if (!fullName || !email) {
+    if (!fullName || !username) {
       setErrorMsg("يرجى تعبئة كافة الحقول الأساسية.");
       return;
     }
@@ -255,7 +260,7 @@ export const Users: React.FC = () => {
       if (editingUser) {
         const updateData: Partial<UserDocument> = {
           fullName,
-          email,
+          username,
           role,
           permissions: userPermissions
         };
@@ -263,13 +268,25 @@ export const Users: React.FC = () => {
         await dbService.updateUser(editingUser.uid, updateData);
         showToast('success', 'تم تحديث المستخدم');
       } else {
-        await authService.createUser(email, password, {
+        // التحقق من أن اسم المستخدم غير موجود مسبقاً
+        const existingUsers = await dbService.getUsers();
+        if (existingUsers.some(u => u.username === username)) {
+          setErrorMsg("اسم المستخدم موجود مسبقاً.");
+          return;
+        }
+
+        const newUser: UserDocument = {
+          uid: crypto.randomUUID(),
           fullName,
-          email,
-          role,
+          username,
+          passwordHash: bcrypt.hashSync(password, 10),
+          role: role as 'super_admin' | 'manager' | 'accountant' | 'employee',
           permissions: userPermissions,
           status: 'active',
-        });
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        await dbService.createUser(newUser);
         showToast('success', 'تم إنشاء المستخدم', 'يمكنه تسجيل الدخول بكلمة المرور المحددة.');
       }
       setIsModalOpen(false);
@@ -312,7 +329,7 @@ export const Users: React.FC = () => {
               <thead>
                 <tr className="bg-brand-50/50 border-b border-brand-100 text-xs font-bold text-gray-500">
                   <th className="p-4.5">المستخدم</th>
-                  <th className="p-4.5">البريد الإلكتروني</th>
+                  <th className="p-4.5">اسم المستخدم (للدخول)</th>
                   <th className="p-4.5">الدور الوظيفي</th>
                   <th className="p-4.5">عدد الصلاحيات الممنوحة</th>
                   <th className="p-4.5">الحالة</th>
@@ -330,7 +347,7 @@ export const Users: React.FC = () => {
                         <span>{u.fullName}</span>
                       </div>
                     </td>
-                    <td className="p-4.5 text-gray-600 font-medium">{u.email}</td>
+                    <td className="p-4.5 text-gray-600 font-medium">{u.username || u.email}</td>
                     <td className="p-4.5">
                       <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px]
                         ${u.role === 'super_admin' ? 'bg-red-50 text-red-700 border border-red-200' :
@@ -341,7 +358,7 @@ export const Users: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-4.5 font-bold text-brand-950">
-                      {u.role === 'super_admin' ? 'كامل الصلاحيات (مطلق)' : `${u.permissions.length} صلاحية معتمدة`}
+                      {u.role === 'super_admin' ? 'كامل الصلاحيات (مطلق)' : `${(u.permissions || []).length} صلاحية معتمدة`}
                     </td>
                     <td className="p-4.5">
                       {u.status === 'active' ? (
@@ -439,14 +456,14 @@ export const Users: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-600">البريد الإلكتروني للوصول</label>
+                  <label className="text-xs font-bold text-gray-600">اسم المستخدم (للدخول)</label>
                   <input
-                    type="email"
+                    type="text"
                     dir="ltr"
                     className="w-full py-2.5 px-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-right"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="accountant@arbahy.com"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
+                    placeholder="accountant_1"
                   />
                 </div>
                 {!editingUser && (
@@ -516,7 +533,7 @@ export const Users: React.FC = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto p-2 bg-gray-50/50 rounded-2xl border border-gray-100 scrollbar-thin">
                   {availablePermissions.map(p => {
-                    const isCheckboxDisabled = !canEditUsers || (currentUser?.role !== 'super_admin' && !currentUser?.permissions.includes(p.key));
+                    const isCheckboxDisabled = !canEditUsers || (currentUser?.role !== 'super_admin' && !(currentUser?.permissions || []).includes(p.key));
                     const isGlobalEditDisabled = currentUser?.role !== 'super_admin';
                     return (
                       <label key={p.key} className="flex items-center gap-2.5 p-2 bg-white rounded-xl border border-gray-100 hover:border-brand-200 transition-all text-xs cursor-pointer select-none">

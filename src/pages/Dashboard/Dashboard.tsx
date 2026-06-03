@@ -9,9 +9,11 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useSettings } from '../../context/SettingsContext';
+import { useAuth } from '../../context/AuthContext';
 import { formatCurrency } from '../../utils/currency';
 
 export const Dashboard: React.FC = () => {
+  const { hasPermission } = useAuth();
   const [employees, setEmployees] = useState<EmployeeDocument[]>([]);
   const [attendance, setAttendance] = useState<AttendanceDocument[]>([]);
   const [overtimes, setOvertimes] = useState<OvertimeDocument[]>([]);
@@ -104,20 +106,24 @@ export const Dashboard: React.FC = () => {
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Link
-              to="/attendance"
-              className="px-5 py-2.5 bg-gold-400 hover:bg-gold-500 text-brand-950 rounded-xl font-bold text-xs transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
-            >
-              <UserCheck size={16} />
-              <span>تحضير اليوم</span>
-            </Link>
-            <Link
-              to="/employees"
-              className="px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold text-xs transition-all border border-white/20 flex items-center gap-1.5 cursor-pointer"
-            >
-              <Plus size={16} />
-              <span>إضافة موظف</span>
-            </Link>
+            {hasPermission('attendance.view') && (
+              <Link
+                to="/attendance"
+                className="px-5 py-2.5 bg-gold-400 hover:bg-gold-500 text-brand-950 rounded-xl font-bold text-xs transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+              >
+                <UserCheck size={16} />
+                <span>تحضير اليوم</span>
+              </Link>
+            )}
+            {hasPermission('employees.create') && (
+              <Link
+                to="/employees"
+                className="px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold text-xs transition-all border border-white/20 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus size={16} />
+                <span>إضافة موظف</span>
+              </Link>
+            )}
           </div>
         </div>
       </motion.div>
@@ -191,76 +197,81 @@ export const Dashboard: React.FC = () => {
       {/* Main Charts & Table section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Right Pane: Department Distribution & Overtime Details */}
-        <motion.div 
-          variants={itemVariants}
-          className="lg:col-span-2 bg-white rounded-3xl p-6 border border-brand-100 shadow-xs space-y-6"
-        >
-          <div className="flex items-center justify-between border-b border-brand-50 pb-4">
-            <div>
-              <h3 className="font-bold text-gray-800 text-base">إحصائيات الساعات الإضافية والأجور الموزعة</h3>
-              <p className="text-xs text-gray-400 mt-1">توزيع العمل الإضافي المعتمد والمبالغ المستحقة المقدرة</p>
+        {hasPermission('overtime.view') ? (
+          <motion.div 
+            variants={itemVariants}
+            className="lg:col-span-2 bg-white rounded-3xl p-6 border border-brand-100 shadow-xs space-y-6"
+          >
+            <div className="flex items-center justify-between border-b border-brand-50 pb-4">
+              <div>
+                <h3 className="font-bold text-gray-800 text-base">إحصائيات الساعات الإضافية والأجور الموزعة</h3>
+                <p className="text-xs text-gray-400 mt-1">توزيع العمل الإضافي المعتمد والمبالغ المستحقة المقدرة</p>
+              </div>
+              <Link to="/overtime" className="text-xs text-brand-600 hover:text-brand-800 font-bold flex items-center gap-0.5">
+                <span>عرض السجلات</span>
+                <ArrowUpRight size={14} />
+              </Link>
             </div>
-            <Link to="/overtime" className="text-xs text-brand-600 hover:text-brand-800 font-bold flex items-center gap-0.5">
-              <span>عرض السجلات</span>
-              <ArrowUpRight size={14} />
-            </Link>
-          </div>
 
-          {/* Custom CSS/SVG Graph demonstrating recent activities */}
-          <div className="space-y-5">
-            <div className="flex items-end justify-between h-48 pt-6 border-b border-gray-100 px-4">
-              {employees.slice(0, 3).map((emp, i) => {
-                const empOvs = overtimes.filter(o => o.employeeId === emp.id);
-                const hrs = empOvs.reduce((sum, o) => sum + o.hours, 0);
-                const heightPercent = Math.min(100, Math.max(10, (hrs / 20) * 100)); // normalized max 20 hours
-                
-                return (
-                  <div key={emp.id} className="flex flex-col items-center gap-2 w-1/3 group">
-                    <span className="text-[10px] font-bold text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {hrs} ساعة ({formatCurrency(empOvs.reduce((s, o) => s + o.totalAmount, 0), currency)})
-                    </span>
-                    <div 
-                      className={`w-12 bg-gradient-to-t rounded-t-xl transition-all duration-500 cursor-pointer shadow-md group-hover:shadow-lg
-                        ${i === 0 ? 'from-brand-600 to-brand-400' : i === 1 ? 'from-gold-500 to-gold-400' : 'from-indigo-600 to-indigo-400'}
-                      `}
-                      style={{ height: `${heightPercent}%` }}
-                    ></div>
-                    <span className="text-[11px] font-medium text-gray-500 truncate max-w-[120px]">{emp.fullName.split(' ')[0]}</span>
+            {/* Custom CSS/SVG Graph demonstrating recent activities */}
+            <div className="space-y-5">
+              <div className="flex items-end justify-between h-48 pt-6 border-b border-gray-100 px-4">
+                {employees.slice(0, 3).map((emp, i) => {
+                  const empOvs = overtimes.filter(o => o.employeeId === emp.id);
+                  const hrs = empOvs.reduce((sum, o) => sum + o.hours, 0);
+                  const heightPercent = Math.min(100, Math.max(10, (hrs / 20) * 100)); // normalized max 20 hours
+                  
+                  return (
+                    <div key={emp.id} className="flex flex-col items-center gap-2 w-1/3 group">
+                      <span className="text-[10px] font-bold text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {hrs} ساعة ({formatCurrency(empOvs.reduce((s, o) => s + o.totalAmount, 0), currency)})
+                      </span>
+                      <div 
+                        className={`w-12 bg-gradient-to-t rounded-t-xl transition-all duration-500 cursor-pointer shadow-md group-hover:shadow-lg
+                          ${i === 0 ? 'from-brand-600 to-brand-400' : i === 1 ? 'from-gold-500 to-gold-400' : 'from-indigo-600 to-indigo-400'}
+                        `}
+                        style={{ height: `${heightPercent}%` }}
+                      ></div>
+                      <span className="text-[11px] font-medium text-gray-500 truncate max-w-[120px]">{emp.fullName.split(' ')[0]}</span>
+                    </div>
+                  );
+                })}
+                {employees.length === 0 && (
+                  <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
+                    لا توجد بيانات ساعات إضافية مسجلة بعد.
                   </div>
-                );
-              })}
-              {employees.length === 0 && (
-                <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
-                  لا توجد بيانات ساعات إضافية مسجلة بعد.
-                </div>
-              )}
-            </div>
-            
-            {/* Visual indicators */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-brand-50/50 rounded-2xl border border-brand-100 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center shrink-0">
-                  <Timer size={18} />
-                </div>
-                <div>
-                  <span className="text-[10px] text-gray-400 block font-semibold">إجمالي الإضافي المالي</span>
-                  <span className="text-sm font-bold text-brand-950">{formatCurrency(totalOvertimeAmount, currency)}</span>
-                </div>
+                )}
               </div>
-              <div className="p-4 bg-gold-50/50 rounded-2xl border border-gold-100/50 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gold-100 text-gold-700 flex items-center justify-center shrink-0">
-                  <Clock size={18} />
+              
+              {/* Visual indicators */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-brand-50/50 rounded-2xl border border-brand-100 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center shrink-0">
+                    <Timer size={18} />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-gray-400 block font-semibold">إجمالي الإضافي المالي</span>
+                    <span className="text-sm font-bold text-brand-950">{formatCurrency(totalOvertimeAmount, currency)}</span>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[10px] text-gray-400 block font-semibold">إجمالي ساعات العمل الزائد</span>
-                  <span className="text-sm font-bold text-gold-950">{totalOvertimeHours} ساعة</span>
+                <div className="p-4 bg-gold-50/50 rounded-2xl border border-gold-100/50 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gold-100 text-gold-700 flex items-center justify-center shrink-0">
+                    <Clock size={18} />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-gray-400 block font-semibold">إجمالي ساعات العمل الزائد</span>
+                    <span className="text-sm font-bold text-gold-950">{totalOvertimeHours} ساعة</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        ) : (
+          <div className="lg:col-span-2 hidden lg:block"></div>
+        )}
 
         {/* Left Pane: Staff Quick Attendance Audit */}
+        {hasPermission('attendance.view') && (
         <motion.div 
           variants={itemVariants}
           className="bg-white rounded-3xl p-6 border border-brand-100 shadow-xs flex flex-col justify-between"
@@ -323,6 +334,7 @@ export const Dashboard: React.FC = () => {
             <ArrowUpRight size={14} />
           </Link>
         </motion.div>
+        )}
       </div>
     </motion.div>
   );

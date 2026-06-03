@@ -1,4 +1,4 @@
-import { isFirebaseConfigured, rtdb } from './firebase';
+import { isFirebaseConfigured, rtdb, authReadyPromise } from './firebase';
 import {
   ref, get, set, update, remove
 } from 'firebase/database';
@@ -13,111 +13,7 @@ import { DEFAULT_ATTENDANCE_SETTINGS } from './attendance';
 // البيانات الافتراضية للوضع المحلي
 // ==========================================
 
-const DEFAULT_USERS: UserDocument[] = [
-  {
-    uid: 'mock-admin',
-    fullName: 'أبو محمد - المدير العام',
-    email: 'admin@arbahy.com',
-    role: 'super_admin',
-    permissions: [
-      'employees.view', 'employees.create', 'employees.edit', 'employees.delete',
-      'salary.view', 'salary.create', 'salary.edit', 'salary.delete',
-      'attendance.view', 'attendance.create', 'attendance.edit',
-      'overtime.view', 'overtime.create', 'overtime.edit',
-      'reports.view', 'reports.print',
-      'settings.view', 'settings.edit',
-      'users.view', 'users.create', 'users.edit', 'users.delete',
-      'departments.view', 'departments.create', 'departments.edit', 'departments.delete',
-    ],
-    status: 'active',
-    passwordHash: 'h_' + Math.abs('adminpassword'.split('').reduce((h, c) => ((h << 5) - h) + c.charCodeAt(0), 0)).toString(36),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    uid: 'mock-accountant',
-    fullName: 'أحمد مراد - المحاسب المالي',
-    email: 'accountant@arbahy.com',
-    role: 'accountant',
-    permissions: [
-      'employees.view',
-      'salary.view', 'salary.edit',
-      'attendance.view', 'attendance.create',
-      'overtime.view', 'overtime.create',
-      'reports.view', 'reports.print',
-      'settings.view',
-      'departments.view',
-    ],
-    status: 'active',
-    passwordHash: 'h_' + Math.abs('123'.split('').reduce((h, c) => ((h << 5) - h) + c.charCodeAt(0), 0)).toString(36),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  }
-];
-
-const DEFAULT_EMPLOYEES: EmployeeDocument[] = [
-  {
-    id: 'emp-1',
-    employeeNo: 'EMP-001',
-    fullName: 'محمد عبد الله الحسين',
-    phone: '0501234567',
-    address: 'الرياض - حي الياسمين',
-    jobTitle: 'أخصائي تغليف وتصميم هدايا',
-    department: 'قسم التغليف الفاخر',
-    basicSalary: 6000,
-    hireDate: '2024-01-15',
-    status: 'active',
-    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'emp-2',
-    employeeNo: 'EMP-002',
-    fullName: 'سارة أحمد الشمري',
-    phone: '0559876543',
-    address: 'الرياض - حي الملقا',
-    jobTitle: 'مسؤولة مبيعات وكاشير',
-    department: 'المبيعات والصالة',
-    basicSalary: 4800,
-    hireDate: '2024-03-01',
-    status: 'active',
-    avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'emp-3',
-    employeeNo: 'EMP-003',
-    fullName: 'خالد عمر باوزير',
-    phone: '0543210987',
-    address: 'الرياض - حي العقيق',
-    jobTitle: 'منسق زهور طبيعية وتصميم كوش',
-    department: 'قسم التنسيق والزهور',
-    basicSalary: 5500,
-    hireDate: '2024-06-10',
-    status: 'active',
-    avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'emp-4',
-    employeeNo: 'EMP-004',
-    fullName: 'ريم علي السبيعي',
-    phone: '0561122334',
-    address: 'الرياض - حي الصحافة',
-    jobTitle: 'أخصائية تغليف وتطريز أشرطة',
-    department: 'قسم التغليف الفاخر',
-    basicSalary: 6200,
-    hireDate: '2025-02-20',
-    status: 'suspended',
-    avatarUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  }
-];
-
+// تمت إزالة المستخدمين والموظفين الوهميين (Mock Data) بناءً على طلب المستخدم
 const DEFAULT_SETTINGS: GeneralSettingsDocument = {
   shopName: 'البورنو لخدمات تغليف الهدايا الراقية',
   dailyWorkingHours: 8,
@@ -138,51 +34,43 @@ const DEFAULT_DEPARTMENTS: DepartmentDocument[] = [
 ];
 
 const DEFAULT_PERMISSIONS: PermissionDocument[] = [
-  { id: 'perm-1',  key: 'employees.view',      label: 'عرض الموظفين',                  createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-2',  key: 'employees.create',    label: 'إضافة موظف',                    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-3',  key: 'employees.edit',      label: 'تعديل موظف',                    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-4',  key: 'employees.delete',    label: 'حذف موظف',                      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-5',  key: 'salary.view',         label: 'عرض الرواتب',                   createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-6',  key: 'salary.create',       label: 'توليد مسير رواتب',              createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-7',  key: 'salary.edit',         label: 'تعديل الرواتب يدوياً',          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-8',  key: 'salary.delete',       label: 'حذف مسيرات الرواتب',            createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-9',  key: 'attendance.view',     label: 'عرض سجل التحضير',              createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-10', key: 'attendance.create',   label: 'تسجيل الحضور والانصراف',       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-11', key: 'attendance.edit',     label: 'تعديل سجل الدوام',             createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-12', key: 'overtime.view',       label: 'عرض الساعات الإضافية',         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-13', key: 'overtime.create',     label: 'إضافة ساعات إضافية',           createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-14', key: 'overtime.edit',       label: 'تعديل وحذف الإضافي',           createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-15', key: 'reports.view',        label: 'عرض مركز التقارير',            createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-16', key: 'reports.print',       label: 'طباعة وتصدير التقارير',        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-17', key: 'settings.view',       label: 'عرض الإعدادات العامة',         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-18', key: 'settings.edit',       label: 'تعديل الإعدادات والمعادلات',   createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-19', key: 'users.view',          label: 'عرض مستخدمي النظام',           createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-20', key: 'users.create',        label: 'إضافة مستخدم جديد',            createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-21', key: 'users.edit',          label: 'تعديل صلاحيات المستخدمين',    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-22', key: 'users.delete',        label: 'حذف المستخدمين',               createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-23', key: 'departments.view',    label: 'عرض الأقسام',                  createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-24', key: 'departments.create',  label: 'إضافة قسم جديد',               createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-25', key: 'departments.edit',    label: 'تعديل الأقسام',                createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-26', key: 'departments.delete',  label: 'حذف الأقسام',                  createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-27', key: 'dashboard.view',      label: 'عرض لوحة القيادة (الرئيسية)',    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-28', key: 'salary.approve',      label: 'اعتماد وقفل مسيرات الرواتب',     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-29', key: 'salary.pay',          label: 'تأكيد صرف مسيرات الرواتب',      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'perm-30', key: 'attendance.delete',   label: 'حذف سجلات الحضور والانصراف',   createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-1', key: 'employees.view', label: 'عرض الموظفين', category: 'employees', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-2', key: 'employees.create', label: 'إضافة موظف', category: 'employees', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-3', key: 'employees.edit', label: 'تعديل موظف', category: 'employees', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-4', key: 'employees.delete', label: 'حذف موظف', category: 'employees', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-5', key: 'salary.view', label: 'عرض كشوفات الرواتب', category: 'salary', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-6', key: 'salary.create', label: 'توليد كشف رواتب', category: 'salary', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-7', key: 'salary.edit', label: 'تعديل كشف الرواتب', category: 'salary', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-8', key: 'salary.delete', label: 'حذف كشوفات الرواتب', category: 'salary', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-9', key: 'attendance.view', label: 'عرض سجل التحضير', category: 'attendance', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-10', key: 'attendance.create', label: 'تسجيل الحضور والانصراف', category: 'attendance', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-11', key: 'attendance.edit', label: 'تعديل سجل الدوام', category: 'attendance', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-12', key: 'overtime.view', label: 'عرض الساعات الإضافية', category: 'attendance', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-13', key: 'overtime.create', label: 'إضافة ساعات إضافية', category: 'attendance', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-14', key: 'overtime.edit', label: 'تعديل وحذف الإضافي', category: 'attendance', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-15', key: 'reports.view', label: 'عرض مركز التقارير', category: 'reports', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-16', key: 'reports.print', label: 'طباعة وتصدير التقارير', category: 'reports', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-17', key: 'settings.view', label: 'عرض الإعدادات العامة', category: 'settings', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-18', key: 'settings.edit', label: 'تعديل الإعدادات والمعادلات', category: 'settings', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-19', key: 'users.view', label: 'عرض مستخدمي النظام', category: 'users', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-20', key: 'users.create', label: 'إضافة مستخدم جديد', category: 'users', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-21', key: 'users.edit', label: 'تعديل صلاحيات المستخدمين', category: 'users', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-22', key: 'users.delete', label: 'حذف المستخدمين', category: 'users', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-23', key: 'departments.view', label: 'عرض الأقسام', category: 'employees', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-24', key: 'departments.create', label: 'إضافة قسم جديد', category: 'employees', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-25', key: 'departments.edit', label: 'تعديل الأقسام', category: 'employees', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-26', key: 'departments.delete', label: 'حذف الأقسام', category: 'employees', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-27', key: 'dashboard.view', label: 'عرض لوحة القيادة (الرئيسية)', category: 'settings', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-28', key: 'salary.approve', label: 'اعتماد وقفل مسيرات الرواتب', category: 'salary', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-29', key: 'salary.pay', label: 'تأكيد صرف مسيرات الرواتب', category: 'salary', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-30', key: 'attendance.delete', label: 'حذف سجلات الحضور والانصراف', category: 'attendance', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
 ];
 
 // ==========================================
-// تهيئة التخزين المحلي
+// تهيئة التخزين المحلي (تمت الإزالة)
 // ==========================================
 const initLocalStorage = () => {
-  if (!localStorage.getItem('users'))         localStorage.setItem('users',         JSON.stringify(DEFAULT_USERS));
-  if (!localStorage.getItem('employees'))     localStorage.setItem('employees',     JSON.stringify(DEFAULT_EMPLOYEES));
-  if (!localStorage.getItem('settings'))      localStorage.setItem('settings',      JSON.stringify(DEFAULT_SETTINGS));
-  if (!localStorage.getItem('attendance'))    localStorage.setItem('attendance',    JSON.stringify([]));
-  if (!localStorage.getItem('overtime'))      localStorage.setItem('overtime',      JSON.stringify([]));
-  if (!localStorage.getItem('salary_cycles')) localStorage.setItem('salary_cycles', JSON.stringify([]));
-  if (!localStorage.getItem('salary_records'))localStorage.setItem('salary_records',JSON.stringify([]));
-  if (!localStorage.getItem('departments'))   localStorage.setItem('departments',   JSON.stringify(DEFAULT_DEPARTMENTS));
-  if (!localStorage.getItem('permissions'))   localStorage.setItem('permissions',   JSON.stringify(DEFAULT_PERMISSIONS));
+  // تم التخلص من حفظ البيانات في LocalStorage للتركيز على RTDB كلياً
 };
 
 initLocalStorage();
@@ -192,17 +80,9 @@ initLocalStorage();
 // ==========================================
 const seedFirebase = async () => {
   if (!isFirebaseConfigured || !rtdb) return;
+  await authReadyPromise;
   try {
-    // تحقق من وجود مستخدمين في Firebase
-    const usersSnap = await get(ref(rtdb, 'users'));
-    if (!usersSnap.exists() || Object.keys(usersSnap.val() || {}).length === 0) {
-      console.log('🌱 Firebase فارغ — رفع البيانات الافتراضية...');
-      // رفع المستخدمين الافتراضيين
-      const usersMap: Record<string, UserDocument> = {};
-      DEFAULT_USERS.forEach(u => { usersMap[u.uid] = u; });
-      await set(ref(rtdb, 'users'), usersMap);
-      console.log('✅ تم رفع المستخدمين الافتراضيين إلى Firebase.');
-    }
+    // تمت إزالة حقن المستخدمين الافتراضيين بناءً على طلب المستخدم
 
     // تحقق من وجود إعدادات
     const settingsSnap = await get(ref(rtdb, 'settings/general'));
@@ -229,14 +109,7 @@ const seedFirebase = async () => {
       console.log('✅ تم رفع الصلاحيات الافتراضية إلى Firebase.');
     }
 
-    // تحقق من وجود موظفين
-    const empsSnap = await get(ref(rtdb, 'employees'));
-    if (!empsSnap.exists() || Object.keys(empsSnap.val() || {}).length === 0) {
-      const empsMap: Record<string, EmployeeDocument> = {};
-      DEFAULT_EMPLOYEES.forEach(e => { empsMap[e.id] = e; });
-      await set(ref(rtdb, 'employees'), empsMap);
-      console.log('✅ تم رفع الموظفين الافتراضيين إلى Firebase.');
-    }
+    // تمت إزالة حقن الموظفين الافتراضيين بناءً على طلب المستخدم
   } catch (err) {
     console.warn('⚠️ فشل رفع البيانات الافتراضية إلى Firebase:', err);
   }
@@ -270,14 +143,21 @@ const withRTDBFallback = async <T>(
   firebaseFn: () => Promise<T>,
   localFn: () => Promise<T>
 ): Promise<T> => {
-  if (!isFirebaseConfigured || !rtdb) return localFn();
+  if (!isFirebaseConfigured || !rtdb) {
+    // If Firebase is not configured, directly use the local fallback.
+    return await localFn();
+  }
+  await authReadyPromise;
   try {
+    // Try the Firebase version first.
     return await firebaseFn();
   } catch (error) {
+    // If the error indicates an offline/network issue, fall back to local storage.
     if (isFirebaseOfflineError(error)) {
-      console.warn('⚠️ Realtime DB غير متاح، تراجع للبيانات المحلية...', error);
-      return localFn();
+      console.warn('⚠️ Firebase غير متصل، الانتقال إلى النسخة المحلية.', error);
+      return await localFn();
     }
+    // Re‑throw other unexpected errors.
     throw error;
   }
 };
@@ -295,22 +175,7 @@ const normalizeSettings = (settings: Partial<GeneralSettingsDocument>): GeneralS
   absenceRule: settings.absenceRule ?? DEFAULT_SETTINGS.absenceRule,
 });
 
-const legacyHash = (str: string): string => {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return 'h_' + Math.abs(hash).toString(36);
-};
-
-const normalizeUsers = (users: UserDocument[]): UserDocument[] => users.map(user => {
-  if (user.passwordHash) return user;
-  if (user.email === 'admin@arbahy.com') return { ...user, passwordHash: legacyHash('adminpassword') };
-  if (user.email === 'accountant@arbahy.com') return { ...user, passwordHash: legacyHash('123') };
-  return user;
-});
+const normalizeUsers = (users: UserDocument[]): UserDocument[] => users;
 
 // ==========================================
 // dbService

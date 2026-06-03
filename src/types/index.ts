@@ -1,13 +1,69 @@
 export interface UserDocument {
+  // المعرف الفريد للمستخدم (من Database)
   uid: string;
   fullName: string;
-  email: string;
-  role: 'super_admin' | 'manager' | 'accountant' | string;
+  username: string; // تم استبدال البريد الإلكتروني باسم المستخدم
+  passwordHash?: string; // كلمة المرور المشفرة
+  sessionToken?: string; // رمز الجلسة الحالي
+  email?: string;
+  phone?: string;
+  avatarUrl?: string;
+  
+  // دور المستخدم
+  role: 'super_admin' | 'manager' | 'accountant' | 'employee';
+  
+  // معرّف القسم (إن وجد)
+  departmentId?: string;
+  
+  // حالة الحساب
+  status: 'active' | 'inactive' | 'suspended' | 'pending_approval';
+  
+  // الصلاحيات (يتم جلبها من قاعدة البيانات)
   permissions: string[];
-  status: 'active' | 'disabled';
-  passwordHash?: string; // للوضع المحلي فقط
+  
+  // بيانات التدقيق
   createdAt: string;
   updatedAt: string;
+  lastLoginAt?: string;
+  
+  // ملاحظات إضافية
+  notes?: string;
+}
+
+// دور المستخدم وصلاحياته
+export interface RoleDocument {
+  id: string;
+  name: string;                   // مثل "super_admin"
+  label: string;                  // مثل "مسؤول عام"
+  description?: string;
+  permissions: string[];          // قائمة الصلاحيات
+  isSystem: boolean;              // هل هو دور نظام محجوز؟
+  status: 'active' | 'disabled';
+  createdAt: string;
+  updatedAt: string;
+}
+
+// الصلاحيات المتاحة
+export interface PermissionDocument {
+  id: string;
+  key: string;                    // مثل "users.view"
+  label: string;                  // مثل "عرض المستخدمين"
+  category: 'users' | 'employees' | 'attendance' | 'salary' | 'reports' | 'settings';
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// جلسة المستخدم
+export interface SessionData {
+  uid: string;
+  fullName: string;
+  username: string;
+  role: string;
+  permissions: string[];
+  status: UserDocument['status'];
+  sessionToken: string;           // Custom Token
+  expiresAt: number;              // Timestamp عند انتهاء الـ Token
 }
 
 export interface EmployeeDocument {
@@ -141,15 +197,6 @@ export interface DepartmentDocument {
   name: string;
   description?: string;
   status: 'active' | 'disabled';
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PermissionDocument {
-  id: string;
-  key: string;        // e.g. "employees.view"
-  label: string;      // e.g. "عرض الموظفين"
-  departmentId?: string; // ربط بقسم
   createdAt: string;
   updatedAt: string;
 }

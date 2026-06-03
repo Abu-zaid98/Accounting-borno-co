@@ -1,7 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
 import { getDatabase } from 'firebase/database';
 import { getStorage } from 'firebase/storage';
+import { getAuth, signInAnonymously } from 'firebase/auth';
 
 // إعدادات Firebase من ملف .env
 const firebaseConfig = {
@@ -16,27 +16,36 @@ const firebaseConfig = {
 
 // التحقق من صحة الإعدادات
 export const isFirebaseConfigured = !!(
-  firebaseConfig.apiKey &&
   firebaseConfig.projectId &&
-  firebaseConfig.authDomain
+  firebaseConfig.databaseURL &&
+  firebaseConfig.apiKey
 );
 
-let auth: ReturnType<typeof getAuth> | null = null;
 let rtdb: ReturnType<typeof getDatabase> | null = null;
 let storage: ReturnType<typeof getStorage> | null = null;
+let auth: ReturnType<typeof getAuth> | null = null;
+let authReadyPromise: Promise<void> = Promise.resolve();
 
 if (isFirebaseConfigured) {
   try {
     const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-    auth = getAuth(app);
     rtdb = getDatabase(app);
     storage = getStorage(app);
+    auth = getAuth(app);
+    
+    // تسجيل دخول مخفي (مجهول) لإرضاء قواعد حماية Firebase Database (auth != null)
+    authReadyPromise = signInAnonymously(auth)
+      .then(() => console.log("✅ Anonymous Auth ready for RTDB."))
+      .catch((err) => {
+        console.warn("⚠️ Anonymous Auth failed. Permission Denied might occur.", err);
+      });
+
     console.log("🔥 Firebase Realtime Database initialized successfully.");
   } catch (error) {
-    console.error("⚠️ Firebase initialization failed, switching to Local Mode:", error);
+    console.error("⚠️ Firebase initialization failed:", error);
   }
 } else {
-  console.warn("⚠️ Firebase not configured. Running in Offline/Local Mode.");
+  console.warn("⚠️ Firebase not configured. Running offline.");
 }
 
-export { auth, rtdb, storage };
+export { rtdb, storage, auth, authReadyPromise };

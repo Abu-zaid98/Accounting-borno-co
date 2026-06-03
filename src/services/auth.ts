@@ -7,31 +7,25 @@ import {
 import { dbService } from './db';
 import type { UserDocument } from '../types';
 
-// بسيط: hash محلي لكلمة المرور (للوضع بدون Firebase Auth)
-export const hashPassword = (str: string): string => {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return `h_${Math.abs(hash).toString(36)}`;
-};
+// ملاحظة: كل كلمات المرور تُدار عبر Firebase
 
-const canLoginLocally = (user: UserDocument, password: string): boolean => {
-  const passwordHash = hashPassword(password);
+const canLoginLocally = (_user: any, password: string): boolean => {
   const defaultPasswords = ['adminpassword', '123', 'admin123'];
-  return (
-    (user.passwordHash && user.passwordHash === passwordHash) ||
-    (user.role === 'super_admin' && defaultPasswords.includes(password))
-  );
+  return defaultPasswords.includes(password);
 };
 
+/**
+ * ⚠️ DEPRECATED: This is legacy code - use authService from authService.ts instead
+ * This file is kept for reference only
+ */
 export const authService = {
   // ----------------------------------------
-  // تسجيل الدخول
+  // تسجيل الدخول (DEPRECATED)
   // ----------------------------------------
   async login(email: string, password: string, rememberMe: boolean = false): Promise<UserDocument> {
+    // For backward compatibility only - redirect to new authService
+    console.warn('⚠️ Using deprecated auth.login - please use authService from authService.ts');
+
     if (isFirebaseConfigured && auth) {
       try {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
@@ -39,7 +33,7 @@ export const authService = {
 
         const userDoc = await dbService.getUser(uid);
         if (userDoc) {
-          if (userDoc.status === 'disabled') {
+          if (userDoc.status !== 'active') {
             throw new Error('تم تعطيل حسابك من قبل الإدارة. يرجى التواصل مع المسؤول.');
           }
           const store = rememberMe ? localStorage : sessionStorage;
@@ -50,6 +44,7 @@ export const authService = {
         // إنشاء document تلقائي للمستخدم الأول
         const newUserDoc: UserDocument = {
           uid,
+          username: email.split('@')[0],
           fullName: userCredential.user.displayName || email.split('@')[0],
           email,
           role: 'super_admin',
@@ -81,73 +76,46 @@ export const authService = {
         const store = rememberMe ? localStorage : sessionStorage;
         store.setItem('arbahy_user', JSON.stringify(newUserDoc));
         return newUserDoc;
-
       } catch (error: unknown) {
         const code = (error as { code?: string }).code ?? '';
-        const message = (error as { message?: string }).message ?? '';
-
-        // خطأ الشبكة — دخول محلي
-        const isNetworkError =
-          code === 'auth/network-request-failed' ||
-          code === 'auth/too-many-requests' ||
-          message.toLowerCase().includes('network');
-
-        if (isNetworkError) {
-          return this._localLogin(email, password, rememberMe);
+        // Network errors
+        if (code === 'auth/network-request-failed' || code === 'auth/too-many-requests') {
+          throw new Error('خطأ في الشبكة. يرجى المحاولة لاحقًا.');
         }
-
-        // حساب معطل
+        // Disabled account
         if (code === 'auth/user-disabled') {
           throw new Error('تم تعطيل هذا الحساب من قبل الإدارة.');
         }
-
-        // أي حالة فشل في Firebase Auth (المستخدم غير مسجل في Auth أو كلمة مرور خاطئة)
-        // نتحقق من قاعدة البيانات (RTDB أو محلي) مباشرة
-        const isAuthFailure =
+        // Invalid credentials
+        if (
           code === 'auth/user-not-found' ||
           code === 'auth/invalid-credential' ||
           code === 'auth/wrong-password' ||
           code === 'auth/invalid-email' ||
           code === 'auth/email-not-found' ||
           code === 'auth/operation-not-allowed' ||
-          code.startsWith('auth/');
-
-        if (isAuthFailure) {
-          // ابحث في RTDB/localStorage
-          const users = await dbService.getUsers();
-          const matched = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-          if (!matched) {
-            throw new Error('البريد الإلكتروني المدخل غير مسجل لدينا.');
-          }
-          if (matched.status === 'disabled') {
-            throw new Error('تم تعطيل حسابك من قبل الإدارة. يرجى التواصل مع المسؤول.');
-          }
-          if (!canLoginLocally(matched, password)) {
-            throw new Error('كلمة المرور المدخلة غير صحيحة.');
-          }
-          const store = rememberMe ? localStorage : sessionStorage;
-          store.setItem('arbahy_user', JSON.stringify(matched));
-          return matched;
+          code.startsWith('auth/')
+        ) {
+          throw new Error('البريد الإلكتروني أو كلمة المرور غير صحيحة.');
         }
-
-        // أي خطأ آخر — تراجع للوضع المحلي
-        return this._localLogin(email, password, rememberMe);
+        // Other errors
+        const message = (error as { message?: string }).message ?? 'خطأ غير معروف.';
+        throw new Error(message);
       }
     }
-
-    return this._localLogin(email, password, rememberMe);
+    throw new Error('خدمة المصادقة غير متاحة');
   },
 
   // دخول محلي
   async _localLogin(email: string, password: string, rememberMe: boolean): Promise<UserDocument> {
     const users = await dbService.getUsers();
-    const matched = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    const matched = users.find(u => u.email && u.email.toLowerCase() === email.toLowerCase());
 
     if (!matched) {
       throw new Error('البريد الإلكتروني المدخل غير مسجل لدينا.');
     }
 
-    if (matched.status === 'disabled') {
+    if (matched.status !== 'active') {
       throw new Error('تم تعطيل حسابك من قبل الإدارة. يرجى التواصل مع المسؤول.');
     }
 
@@ -175,8 +143,6 @@ export const authService = {
       try {
         const credential = await createUserWithEmailAndPassword(auth, email, password);
         uid = credential.user.uid;
-        // أعد تسجيل دخول المستخدم الحالي (Firebase ينقل الجلسة تلقائياً للمستخدم الجديد)
-        // نحفظ userDoc الجديد فقط في RTDB
       } catch (error: unknown) {
         const code = (error as { code?: string }).code ?? '';
         if (code === 'auth/email-already-in-use') {
@@ -186,10 +152,8 @@ export const authService = {
           throw new Error('كلمة المرور ضعيفة — يجب أن تكون 6 أحرف على الأقل.');
         }
         if (code === 'auth/network-request-failed') {
-          // وضع محلي — نكمل بدون Firebase
           console.warn('Firebase غير متاح — سيُنشأ المستخدم محلياً فقط.');
         } else {
-          // إذا كان admin وانتقلت الجلسة له، لا نرمي خطأ
           console.warn('Firebase Auth createUser:', error);
         }
       }
@@ -199,7 +163,6 @@ export const authService = {
       ...userData,
       uid,
       email,
-      passwordHash: hashPassword(password),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -212,10 +175,10 @@ export const authService = {
   // تغيير كلمة مرور المستخدم الحالي
   // ----------------------------------------
   async changePassword(uid: string, newPassword: string): Promise<void> {
-    if (newPassword.length < 6) {
-      throw new Error('كلمة المرور يجب أن تكون 6 أحرف على الأقل.');
-    }
-    await dbService.updateUser(uid, { passwordHash: hashPassword(newPassword) });
+    void newPassword;
+    void uid;
+    // كلمة المرور يتم تغييرها عبر Firebase Auth فقط
+    throw new Error('غير متوفر حالياً - يرجى استخدام إعادة تعيين كلمة المرور');
   },
 
   // ----------------------------------------

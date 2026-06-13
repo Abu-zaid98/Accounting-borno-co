@@ -1,0 +1,187 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "sessions": {
+      ".read": false,
+      ".write": false,
+      "$sessionToken": {
+        ".validate": "newData.hasChildren(['uid', 'companyId', 'role', 'permissions', 'createdAt', 'expiresAt', 'isActive'])",
+
+        "uid": {
+          ".validate": "newData.isString() && newData.val().length > 0"
+        },
+        "companyId": {
+          ".validate": "newData.isString() && newData.val().length > 0"
+        },
+        "role": {
+          ".validate": "newData.isString() && ['super_admin', 'manager', 'accountant', 'employee'].includes(newData.val())"
+        },
+        "permissions": {
+          ".validate": "newData.isArray()"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "expiresAt": {
+          ".validate": "newData.isNumber() && newData.val() > now"
+        },
+        "isActive": {
+          ".validate": "newData.isBoolean()"
+        },
+        ".read": "data.exists() && data.child('isActive').val() === true && data.child('expiresAt').val() > now && root.child('sessions').child($sessionToken).exists()",
+        ".write": "root.child('auth').child('systemToken').val() === auth.token || (newData.parent().parent().child($sessionToken).child('uid').val() === auth.uid && root.child('sessions').child($sessionToken).child('isActive').val() === true)"
+      }
+    },
+
+    "userCredentials": {
+      ".read": false,
+      ".write": false,
+      "$uid": {
+        ".read": false,
+        ".write": false,
+        "passwordHash": {
+          ".read": false,
+          ".write": false,
+          ".validate": "newData.isString() && newData.val().length > 0"
+        },
+        "status": {
+          ".validate": "newData.isString() && ['active', 'inactive', 'suspended', 'pending_approval'].includes(newData.val())"
+        },
+        "lastPasswordChange": {
+          ".validate": "newData.isNumber()"
+        }
+      }
+    },
+
+    "companies": {
+      ".read": false,
+      ".write": false,
+
+      "$companyId": {
+        ".validate": "newData.hasChildren(['metadata'])",
+
+        "metadata": {
+          "name": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 255"
+          },
+          "status": {
+            ".validate": "newData.isString() && ['active', 'inactive', 'suspended'].includes(newData.val())"
+          },
+          "createdAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "updatedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          ".read": "query.limitToFirst(1).isLimit() || query.limitToLast(1).isLimit() || auth != null",
+          ".write": "root.child('companies').child($companyId).child('metadata').child('status').val() === 'active' && (root.child('sessions').child(query.limitToFirst(1).key).child('companyId').val() === $companyId && root.child('sessions').child(query.limitToFirst(1).key).child('role').val() === 'super_admin')"
+        },
+
+        "users": {
+          ".read": "auth != null && root.child('sessions').exists() && query.limitToFirst(100).isLimit()",
+          ".write": false,
+
+          "$uid": {
+            "uid": { ".validate": "newData.val() === $uid" },
+            "fullName": { ".validate": "newData.isString() && newData.val().length > 0" },
+            "username": { ".validate": "newData.isString() && newData.val().length > 2" },
+            "role": { ".validate": "newData.isString() && ['super_admin', 'manager', 'accountant', 'employee'].includes(newData.val())" },
+            "status": { ".validate": "newData.isString() && ['active', 'inactive', 'suspended', 'pending_approval'].includes(newData.val())" },
+            "permissions": { ".validate": "newData.isArray()" },
+            "createdAt": { ".validate": "newData.isNumber()" },
+            "updatedAt": { ".validate": "newData.isNumber()" },
+            "lastLoginAt": { ".validate": "newData.isNumber()" },
+
+            ".read": "auth != null && (query.limitToFirst(1).isLimit() || query.limitToLast(1).isLimit() || $uid === query.limitToFirst(1).key)",
+            ".write": false
+          }
+        },
+
+        "employees": {
+          ".read": "auth != null && root.child('sessions').exists() && query.limitToFirst(500).isLimit()",
+          ".write": false,
+
+          "$employeeId": {
+            "id": { ".validate": "newData.val() === $employeeId" },
+            "employeeNo": { ".validate": "newData.isString()" },
+            "fullName": { ".validate": "newData.isString()" },
+            "status": { ".validate": "newData.isString() && ['active', 'suspended', 'archived'].includes(newData.val())" },
+
+            ".read": "root.child('sessions').exists() && (data.parent().parent().parent().child('metadata').child('status').val() === 'active' || true)",
+            ".write": "auth != null && (root.child('sessions').child(query.limitToFirst(1).key).child('role').val() === 'super_admin' || root.child('sessions').child(query.limitToFirst(1).key).child('permissions').contains('employees.edit'))"
+          }
+        },
+
+        "salaries": {
+          ".read": "auth != null && root.child('sessions').exists() && (root.child('sessions').child(query.limitToFirst(1).key).child('role').val() === 'super_admin' || root.child('sessions').child(query.limitToFirst(1).key).child('permissions').contains('salary.view'))",
+          ".write": false,
+
+          "$salaryId": {
+            "employeeId": { ".validate": "newData.isString()" },
+            "basicSalary": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+            "status": { ".validate": "newData.isString() && ['unpaid', 'paid'].includes(newData.val())" },
+
+            ".write": "auth != null && (root.child('sessions').child(query.limitToFirst(1).key).child('role').val() === 'super_admin' || root.child('sessions').child(query.limitToFirst(1).key).child('permissions').contains('salary.edit'))"
+          }
+        },
+
+        "attendance": {
+          ".read": "auth != null && root.child('sessions').exists() && (root.child('sessions').child(query.limitToFirst(1).key).child('role').val() === 'super_admin' || root.child('sessions').child(query.limitToFirst(1).key).child('permissions').contains('attendance.view'))",
+          ".write": false,
+
+          "$attendanceId": {
+            "employeeId": { ".validate": "newData.isString()" },
+            "status": { ".validate": "newData.isString() && ['present', 'late', 'absent', 'outside_shift'].includes(newData.val())" },
+
+            ".write": "auth != null && (root.child('sessions').child(query.limitToFirst(1).key).child('role').val() === 'super_admin' || root.child('sessions').child(query.limitToFirst(1).key).child('permissions').contains('attendance.edit'))"
+          }
+        },
+
+        "settings": {
+          ".read": "auth != null",
+          ".write": "auth != null && (root.child('sessions').child(query.limitToFirst(1).key).child('role').val() === 'super_admin' || root.child('sessions').child(query.limitToFirst(1).key).child('permissions').contains('settings.edit'))"
+        }
+      }
+    },
+
+    "auditLogs": {
+      ".read": false,
+      ".write": false,
+
+      "$companyId": {
+        ".read": "auth != null && root.child('sessions').exists() && (root.child('sessions').child(query.limitToFirst(1).key).child('role').val() === 'super_admin' || root.child('sessions').child(query.limitToFirst(1).key).child('permissions').contains('audit.view'))",
+
+        "$logId": {
+          "userId": { ".validate": "newData.isString()" },
+          "action": { ".validate": "newData.isString()" },
+          "timestamp": { ".validate": "newData.isNumber()" },
+          "resource": { ".validate": "newData.isString()" },
+          "metadata": { ".validate": "newData.isObject()" },
+
+          ".write": false
+        }
+      }
+    },
+
+    "rateLimits": {
+      ".read": false,
+      ".write": false,
+
+      "$key": {
+        "attempts": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+        "lastAttemptTime": {
+          ".validate": "newData.isNumber()"
+        },
+        "blockedUntil": {
+          ".validate": "newData.isNumber() || !newData.exists()"
+        },
+
+        ".write": "root.child('auth').child('systemToken').val() === auth.token"
+      }
+    }
+  }
+}

@@ -19,7 +19,7 @@ export const Dashboard: React.FC = () => {
   const [overtimes, setOvertimes] = useState<OvertimeDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const { settings } = useSettings();
-  const currency = settings?.globalCurrency ?? settings?.currency ?? 'ر.س';
+  const currency = settings?.globalCurrency ?? settings?.currency ?? '₪';
 
   useEffect(() => {
     const fetchData = async () => {

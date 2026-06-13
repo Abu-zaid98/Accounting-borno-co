@@ -5,7 +5,7 @@ import type { EmployeeDocument, SalaryCycleDocument, SalaryRecordDocument, Overt
 import { useReactToPrint } from 'react-to-print';
 import { formatCurrency } from '../../utils/currency';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
-import { 
+import {
   Wallet, Plus, CheckCircle, Printer, Calendar,
   Edit3, X, FileText, Gift, Building, Trash2
 } from 'lucide-react';
@@ -24,7 +24,7 @@ export const Salaries: React.FC = () => {
   const [records, setRecords] = useState<SalaryRecordDocument[]>([]);
   const [employees, setEmployees] = useState<EmployeeDocument[]>([]);
   const [overtimes, setOvertimes] = useState<OvertimeDocument[]>([]);
-  
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [editingRecord, setEditingRecord] = useState<SalaryRecordDocument | null>(null);
   const [viewingPayslip, setViewingPayslip] = useState<SalaryRecordDocument | null>(null);
@@ -33,9 +33,9 @@ export const Salaries: React.FC = () => {
   const [paidConfirmOpen, setPaidConfirmOpen] = useState(false);
   const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
   const [deleteCycleConfirm, setDeleteCycleConfirm] = useState(false);
-  
+
   const { settings } = useSettings();
-  const currencySymbol = settings?.globalCurrency ?? settings?.currency ?? 'ر.س';
+  const currencySymbol = settings?.globalCurrency ?? settings?.currency ?? '₪';
 
   // Edit Form States
   const [manualBonuses, setManualBonuses] = useState<number>(0);
@@ -133,7 +133,7 @@ export const Salaries: React.FC = () => {
         ).length;
 
         // Equation absent deduction
-        const absentDeduction = Math.round((emp.basicSalary / 30) * absentCount);
+        const absentDeduction = Math.round((emp.basicSalary / 26) * absentCount);
 
         const netSal = emp.basicSalary + totalOvsAmount - absentDeduction;
 
@@ -180,7 +180,7 @@ export const Salaries: React.FC = () => {
     if (!editingRecord) return;
 
     const netSal = editingRecord.basicSalary + editingRecord.overtimeAmount + manualBonuses - manualDeductions;
-    
+
     try {
       await dbService.updateSalaryRecord(editingRecord.id, {
         bonuses: manualBonuses,
@@ -291,7 +291,7 @@ export const Salaries: React.FC = () => {
 
           {canCreate && (
             <button
-                onClick={requestGenerateCycle}
+              onClick={requestGenerateCycle}
               disabled={isProcessing}
               className="px-5 py-2.5 bg-gradient-to-l from-brand-700 to-brand-600 hover:from-brand-800 hover:to-brand-700 text-white rounded-xl font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-60"
             >
@@ -537,8 +537,8 @@ export const Salaries: React.FC = () => {
                   <Printer size={14} />
                   <span>طباعة ورقية / حفظ PDF</span>
                 </button>
-                <button 
-                  onClick={() => setViewingPayslip(null)} 
+                <button
+                  onClick={() => setViewingPayslip(null)}
                   className="p-1.5 text-gray-400 hover:text-gray-600 cursor-pointer"
                 >
                   <X size={18} />
@@ -548,8 +548,8 @@ export const Salaries: React.FC = () => {
 
             {/* A4 Payslip Paper area */}
             <div className="flex-1 overflow-y-auto p-6 md:p-12 bg-gray-100/50 scrollbar-thin">
-              <div 
-                ref={printComponentRef} 
+              <div
+                ref={printComponentRef}
                 className="bg-white mx-auto shadow-sm p-8 max-w-[21cm] min-h-[29.7cm] border border-gray-300 rounded-sm font-sans text-xs leading-relaxed text-gray-900"
                 style={{ direction: 'rtl' }}
               >

@@ -6,7 +6,7 @@ import { formatCurrency } from '../../utils/currency';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as zod from 'zod';
-import { 
+import {
   Users, Plus, Search, Filter, Edit, Trash2, Archive,
   X, Check, AlertCircle, Briefcase
 } from 'lucide-react';
@@ -28,6 +28,7 @@ const employeeSchema = zod.object({
   absenceAfterMinutes: zod.number().min(0),
   hireDate: zod.string().min(1, 'تاريخ التوظيف مطلوب'),
   status: zod.enum(['active', 'suspended', 'archived']),
+  idNumber: zod.string().regex(/^\d{7,15}$/, 'رقم الهوية غير صحيح').optional(),
   avatarUrl: zod.string().optional(),
 });
 
@@ -50,7 +51,7 @@ export const Employees: React.FC = () => {
   const [archiveTarget, setArchiveTarget] = useState<EmployeeDocument | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EmployeeDocument | null>(null);
   const { settings } = useSettings();
-  const currency = settings?.globalCurrency ?? settings?.currency ?? 'ر.س';
+  const currency = settings?.globalCurrency ?? settings?.currency ?? '₪';
 
   const {
     register,
@@ -133,8 +134,9 @@ export const Employees: React.FC = () => {
       lateAfterMinutes: emp.lateRule?.afterMinutes ?? settings?.lateRule?.afterMinutes ?? 10,
       absenceAfterMinutes: emp.absenceRule?.afterMinutes ?? settings?.absenceRule?.afterMinutes ?? 240,
       hireDate: emp.hireDate,
-      status: emp.status,
+      status: emp.status ?? 'active',
       avatarUrl: emp.avatarUrl || '',
+      idNumber: emp.idNumber ?? '',
     });
     setErrorMsg(null);
     setIsModalOpen(true);
@@ -169,6 +171,8 @@ export const Employees: React.FC = () => {
         // Update Employee
         await dbService.updateEmployee(editingEmployee.id, {
           ...data,
+          status: data.status ?? 'active',
+          idNumber: data.idNumber ?? editingEmployee.idNumber,
           lateRule: { afterMinutes: data.lateAfterMinutes },
           absenceRule: { afterMinutes: data.absenceAfterMinutes },
         });
@@ -190,8 +194,9 @@ export const Employees: React.FC = () => {
           lateRule: { afterMinutes: data.lateAfterMinutes },
           absenceRule: { afterMinutes: data.absenceAfterMinutes },
           hireDate: data.hireDate,
-          status: data.status,
-          avatarUrl: data.avatarUrl || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150`,
+          status: data.status ?? 'active',
+          idNumber: data.idNumber,
+
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -206,11 +211,12 @@ export const Employees: React.FC = () => {
 
   // Filtration logic
   const filteredEmployees = employees.filter(emp => {
-    const matchesSearch = 
+    const matchesSearch =
       emp.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       emp.employeeNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.jobTitle.toLowerCase().includes(searchTerm.toLowerCase());
-      
+      emp.jobTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (emp.idNumber ?? '').includes(searchTerm);
+
     const matchesStatus = statusFilter === 'all' || emp.status === statusFilter;
     const matchesDept = deptFilter === 'all' || emp.department === deptFilter;
 
@@ -263,7 +269,7 @@ export const Employees: React.FC = () => {
           </span>
           <input
             type="text"
-            placeholder="البحث بالاسم أو الرقم الوظيفي..."
+            placeholder="البحث بالاسم أو الرقم الوظيفي أو رقم الهوية..."
             className="w-full py-2.5 pr-10 pl-4 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-hidden focus:ring-2 focus:ring-brand-500 focus:bg-white text-right"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -325,6 +331,8 @@ export const Employees: React.FC = () => {
               <thead>
                 <tr className="bg-brand-50/50 border-b border-brand-100 text-xs font-bold text-gray-500">
                   <th className="p-4.5">الرقم الوظيفي</th>
+                  <th className="p-4.5">رقم الهوية</th>
+
                   <th className="p-4.5">الموظف</th>
                   <th className="p-4.5">رقم الجوال</th>
                   <th className="p-4.5">القسم والمسمى</th>
@@ -337,7 +345,9 @@ export const Employees: React.FC = () => {
               <tbody className="divide-y divide-brand-50 text-xs">
                 {filteredEmployees.map(emp => (
                   <tr key={emp.id} className="hover:bg-brand-50/20 transition-all">
-                    <td className="p-4.5 font-bold text-brand-900">{emp.employeeNo}</td>
+                    <td className="p-4.5 font-mono font-bold text-brand-700">{emp.employeeNo}</td>
+                    <td className="p-4.5 text-gray-600">{emp.idNumber ?? '-'}</td>
+
                     <td className="p-4.5">
                       <div className="flex items-center gap-3">
                         <img
@@ -409,7 +419,7 @@ export const Employees: React.FC = () => {
               <h2 className="font-bold text-gray-800 text-base">
                 {editingEmployee ? `تعديل ملف الموظف: ${editingEmployee.fullName}` : 'إضافة موظف جديد لقائمة المحل'}
               </h2>
-              <button 
+              <button
                 onClick={() => setIsModalOpen(false)}
                 className="p-1.5 rounded-lg hover:bg-brand-100 text-gray-400 hover:text-gray-600 cursor-pointer"
               >
@@ -483,6 +493,20 @@ export const Employees: React.FC = () => {
                   {errors.jobTitle && <p className="text-red-500 text-[10px]">{errors.jobTitle.message}</p>}
                 </div>
 
+                {/* ID Number */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-600">رقم هوية الموظف</label>
+                  <input
+                    type="text"
+                    placeholder="123456789"
+                    className={`w-full py-2.5 px-3 bg-gray-50 border rounded-xl text-xs focus:ring-2 focus:ring-brand-500 focus:bg-white text-right
+                      ${errors.idNumber ? 'border-red-400' : 'border-gray-200'}
+                    `}
+                    {...register('idNumber')}
+                  />
+                  {errors.idNumber && <p className="text-red-500 text-[10px]">{errors.idNumber.message}</p>}
+                </div>
+
                 {/* Department */}
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-gray-600">القسم</label>
@@ -523,7 +547,7 @@ export const Employees: React.FC = () => {
                   </select>
                 </div>
 
-              
+
 
                 {/* Hire Date */}
                 <div className="space-y-1">

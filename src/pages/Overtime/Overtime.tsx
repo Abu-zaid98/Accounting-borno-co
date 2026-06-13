@@ -5,9 +5,9 @@ import { formatCurrency } from '../../utils/currency';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as zod from 'zod';
-import { 
-  Timer, Plus, Search, Clock, 
-  Trash2, Check, AlertCircle, X, DollarSign 
+import {
+  Timer, Plus, Search, Clock,
+  Trash2, Check, AlertCircle, X, DollarSign
 } from 'lucide-react';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { useAuth } from '../../context/AuthContext';
@@ -53,7 +53,7 @@ export const Overtime: React.FC = () => {
 
   const selectedEmployeeId = watch('employeeId');
   const enteredHours = watch('hours');
-  const currency = settings?.globalCurrency ?? settings?.currency ?? 'ر.س';
+  const currency = settings?.globalCurrency ?? settings?.currency ?? '₪';
 
   const fetchData = async () => {
     setLoading(true);
@@ -93,8 +93,8 @@ export const Overtime: React.FC = () => {
     if (settings.overtimeRateType === 'fixed') {
       return settings.fixedOvertimeRate;
     }
-    // Equation: Salary / 30 / workingHours * 1.5 multiplier standard
-    const hourlyBase = emp.basicSalary / 30 / settings.dailyWorkingHours;
+    // Equation: Salary / 26 / workingHours * 1.5 multiplier standard
+    const hourlyBase = emp.basicSalary / 26 / settings.dailyWorkingHours;
     return Math.round(hourlyBase * 1.5 * 10) / 10;
   };
 
@@ -152,7 +152,7 @@ export const Overtime: React.FC = () => {
 
   const liveDetails = getSelectedEmployeeDetails();
 
-  const filteredRecords = overtimeRecords.filter(rec => 
+  const filteredRecords = overtimeRecords.filter(rec =>
     rec.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     rec.reason.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -286,7 +286,7 @@ export const Overtime: React.FC = () => {
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-brand-100 flex items-center justify-between bg-brand-50/50">
               <h2 className="font-bold text-gray-800 text-base">تسجيل ساعات عمل إضافية</h2>
-              <button 
+              <button
                 onClick={() => setIsModalOpen(false)}
                 className="p-1.5 rounded-lg hover:bg-brand-100 text-gray-400 hover:text-gray-600 cursor-pointer"
               >

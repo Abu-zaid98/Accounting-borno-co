@@ -3,7 +3,7 @@ import { dbService } from '../../services/db';
 import { useSettings } from '../../context/SettingsContext';
 import { DEFAULT_ATTENDANCE_SETTINGS } from '../../services/attendance';
 import type { AttendanceShiftSettings, ShiftType } from '../../types';
-import { Settings as  Save, CheckCircle2, Gift, Building2, Timer } from 'lucide-react';
+import { Settings as Save, CheckCircle2, Gift, Building2, Timer } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const shiftLabels: Record<ShiftType, string> = {
@@ -19,7 +19,7 @@ export const Settings: React.FC = () => {
   const [dailyWorkingHours, setDailyWorkingHours] = useState(8);
   const [overtimeRateType, setOvertimeRateType] = useState<'auto' | 'fixed'>('auto');
   const [fixedOvertimeRate, setFixedOvertimeRate] = useState(25);
-  const [globalCurrency, setGlobalCurrency] = useState('ر.س');
+  const [globalCurrency, setGlobalCurrency] = useState('₪');
   const [shiftType, setShiftType] = useState<'morning' | 'evening'>('morning');
   const [shiftDrafts, setShiftDrafts] = useState<Record<ShiftType, AttendanceShiftSettings>>(DEFAULT_ATTENDANCE_SETTINGS.shifts);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
@@ -32,7 +32,7 @@ export const Settings: React.FC = () => {
     setDailyWorkingHours(settings.dailyWorkingHours);
     setOvertimeRateType(settings.overtimeRateType);
     setFixedOvertimeRate(settings.fixedOvertimeRate);
-    setGlobalCurrency(settings.globalCurrency ?? settings.currency ?? 'ر.س');
+    setGlobalCurrency(settings.globalCurrency ?? settings.currency ?? '₪');
     setShiftType(settings.shiftType);
     // (Global states removed from UI, keeping shifts only)
     setShiftDrafts({
@@ -104,14 +104,14 @@ export const Settings: React.FC = () => {
       <form onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Right side inputs */}
         <div className="lg:col-span-2 space-y-6 bg-white p-6 md:p-8 rounded-3xl border border-brand-100 shadow-xs">
-          
+
           {/* Shop Details */}
           <div className="space-y-4">
             <h3 className="font-bold text-gray-800 text-xs border-r-4 border-gold-500 pr-2 flex items-center gap-1.5">
               <Building2 size={16} className="text-gray-500" />
               <span>هوية المحل التجارية</span>
             </h3>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-600">اسم المتجر / المحل (عربي)</label>
@@ -132,7 +132,7 @@ export const Settings: React.FC = () => {
                   className="w-full py-2.5 px-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-right focus:bg-white disabled:opacity-75 disabled:cursor-not-allowed"
                   value={globalCurrency}
                   onChange={(e) => setGlobalCurrency(e.target.value)}
-                  placeholder="ر.س"
+                  placeholder="₪"
                 />
               </div>
             </div>
@@ -298,9 +298,9 @@ export const Settings: React.FC = () => {
             </div>
             <h3 className="font-bold text-base text-white">معادلات احتساب الرواتب التلقائية</h3>
             <div className="space-y-3 text-[11px] text-brand-200 leading-relaxed">
-              <p>• <strong>الأجر الأساسي بالساعة:</strong> الراتب الأساسي ÷ 30 يوماً ÷ عدد ساعات العمل اليومية الرسمية.</p>
-              <p>• <strong>قيمة الأجر الإضافي التلقائي:</strong> الساعات الإضافية المعتمدة × أجر ساعة العمل الأساسية × مضاعف 1.5x المعتمد بالمملكة وقوانين العمل.</p>
-              <p>• <strong>الخصومات التلقائية للغياب:</strong> (الراتب الأساسي ÷ 30 يوماً) × عدد أيام الغياب المسجلة بالتحضير.</p>
+              <p>• <strong>الأجر الأساسي بالساعة:</strong> الراتب الأساسي ÷ 26 يوماً ÷ عدد ساعات العمل اليومية الرسمية.</p>
+              <p>• <strong>قيمة الأجر الإضافي التلقائي:</strong> الساعات الإضافية المعتمدة × أجر ساعة العمل الأساسية × مضاعف 1.5x المعتمد.</p>
+              <p>• <strong>الخصومات التلقائية للغياب:</strong> (الراتب الأساسي ÷ 26 يوماً) × عدد أيام الغياب المسجلة بالتحضير.</p>
             </div>
           </div>
         </div>

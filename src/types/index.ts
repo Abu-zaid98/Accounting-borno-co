@@ -84,6 +84,8 @@ export interface EmployeeDocument {
   hireDate: string;
   status: 'active' | 'suspended' | 'archived';
   avatarUrl?: string;
+  // رقم هوية الموظف (اختياري)
+  idNumber?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -19,8 +19,8 @@ const DEFAULT_SETTINGS: GeneralSettingsDocument = {
   dailyWorkingHours: 8,
   overtimeRateType: 'auto',
   fixedOvertimeRate: 25,
-  globalCurrency: 'ر.س',
-  currency: 'ر.س',
+  globalCurrency: '₪',
+  currency: '₪',
   ...DEFAULT_ATTENDANCE_SETTINGS,
   updatedAt: new Date().toISOString()
 };

@@ -5,7 +5,7 @@ import {
 import type {
   UserDocument, EmployeeDocument, AttendanceDocument, OvertimeDocument,
   SalaryCycleDocument, SalaryRecordDocument, GeneralSettingsDocument,
-  DepartmentDocument, PermissionDocument
+  DepartmentDocument, PermissionDocument, FinancialTransactionType, EmployeeFinancialTransaction
 } from '../types';
 import { DEFAULT_ATTENDANCE_SETTINGS } from './attendance';
 
@@ -64,6 +64,20 @@ const DEFAULT_PERMISSIONS: PermissionDocument[] = [
   { id: 'perm-28', key: 'salary.approve', label: 'اعتماد وقفل مسيرات الرواتب', category: 'salary', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: 'perm-29', key: 'salary.pay', label: 'تأكيد صرف مسيرات الرواتب', category: 'salary', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: 'perm-30', key: 'attendance.delete', label: 'حذف سجلات الحضور والانصراف', category: 'attendance', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-31', key: 'employee-financial-transactions.view', label: 'عرض الحركات المالية', category: 'employees', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-32', key: 'employee-financial-transactions.create', label: 'إضافة حركة مالية', category: 'employees', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-33', key: 'employee-financial-transactions.edit', label: 'تعديل الحركات المالية', category: 'employees', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'perm-34', key: 'employee-financial-transactions.delete', label: 'حذف الحركات المالية', category: 'employees', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+];
+
+const DEFAULT_FINANCIAL_TRANSACTION_TYPES: FinancialTransactionType[] = [
+  { id: 'type-1', name: 'مكافأة أداء', category: 'BONUS', isSystem: false, createdAt: new Date().toISOString() },
+  { id: 'type-2', name: 'بدل مواصلات', category: 'BONUS', isSystem: false, createdAt: new Date().toISOString() },
+  { id: 'type-3', name: 'سلفة مالية', category: 'DEDUCTION', isSystem: false, createdAt: new Date().toISOString() },
+  { id: 'type-4', name: 'خصم إداري', category: 'DEDUCTION', isSystem: false, createdAt: new Date().toISOString() },
+  { id: 'type-5', name: 'حسم غياب', category: 'DEDUCTION', isSystem: true, createdAt: new Date().toISOString() },
+  { id: 'type-6', name: 'تسوية راتب', category: 'BONUS', isSystem: true, createdAt: new Date().toISOString() },
+  { id: 'type-7', name: 'تسوية راتب (سالب)', category: 'DEDUCTION', isSystem: true, createdAt: new Date().toISOString() },
 ];
 
 // ==========================================
@@ -100,16 +114,70 @@ const seedFirebase = async () => {
       console.log('✅ تم رفع الأقسام الافتراضية إلى Firebase.');
     }
 
-    // تحقق من وجود صلاحيات
+    // تحقق من وجود صلاحيات وأضف الناقص منها
     const permsSnap = await get(ref(rtdb, 'permissions'));
-    if (!permsSnap.exists() || Object.keys(permsSnap.val() || {}).length === 0) {
-      const permsMap: Record<string, PermissionDocument> = {};
-      DEFAULT_PERMISSIONS.forEach(p => { permsMap[p.id] = p; });
-      await set(ref(rtdb, 'permissions'), permsMap);
-      console.log('✅ تم رفع الصلاحيات الافتراضية إلى Firebase.');
+    const currentPerms = permsSnap.exists() ? permsSnap.val() : {};
+    const permsToUpdate: Record<string, PermissionDocument> = {};
+    let hasMissingPerms = false;
+    
+    DEFAULT_PERMISSIONS.forEach(p => {
+      if (!currentPerms[p.id]) {
+        permsToUpdate[p.id] = p;
+        hasMissingPerms = true;
+      }
+    });
+    
+    if (hasMissingPerms) {
+      await update(ref(rtdb, 'permissions'), permsToUpdate);
+      console.log('✅ تم دمج الصلاحيات الجديدة الناقصة إلى Firebase.');
+    }
+
+    // تحقق من أنواع الحركات المالية
+    const fTypesSnap = await get(ref(rtdb, 'financial_transaction_types'));
+    if (!fTypesSnap.exists() || Object.keys(fTypesSnap.val() || {}).length === 0) {
+      const typesMap: Record<string, FinancialTransactionType> = {};
+      DEFAULT_FINANCIAL_TRANSACTION_TYPES.forEach(t => { typesMap[t.id] = t; });
+      await set(ref(rtdb, 'financial_transaction_types'), typesMap);
+      console.log('✅ تم رفع أنواع الحركات المالية الافتراضية إلى Firebase.');
     }
 
     // تمت إزالة حقن الموظفين الافتراضيين بناءً على طلب المستخدم
+
+    // Migration: منح صلاحيات الحركات المالية للمدراء بشكل تلقائي لمرة واحدة
+    const usersSnap = await get(ref(rtdb, 'users'));
+    if (usersSnap.exists()) {
+      const usersData = usersSnap.val() as Record<string, UserDocument>;
+      const usersUpdates: Record<string, any> = {};
+      const newPerms = [
+        'employee-financial-transactions.view',
+        'employee-financial-transactions.create',
+        'employee-financial-transactions.edit',
+        'employee-financial-transactions.delete'
+      ];
+      
+      let needUserUpdate = false;
+      Object.values(usersData).forEach(u => {
+        if (u.role === 'super_admin' || u.role === 'manager') {
+          const perms = u.permissions || [];
+          let added = false;
+          newPerms.forEach(np => {
+            if (!perms.includes(np)) {
+              perms.push(np);
+              added = true;
+            }
+          });
+          if (added) {
+            usersUpdates[`${u.uid}/permissions`] = perms;
+            needUserUpdate = true;
+          }
+        }
+      });
+      
+      if (needUserUpdate) {
+        await update(ref(rtdb, 'users'), usersUpdates);
+        console.log('✅ تم دمج الصلاحيات الجديدة لمدراء النظام بنجاح.');
+      }
+    }
   } catch (err) {
     console.warn('⚠️ فشل رفع البيانات الافتراضية إلى Firebase:', err);
   }
@@ -655,6 +723,70 @@ export const dbService = {
       async () => {
         const all = (await this.getPermissions()).filter(p => p.id !== id);
         localStorage.setItem('permissions', JSON.stringify(all));
+      }
+    );
+  },
+
+  // ----------------------------------------
+  // الحركات المالية للموظفين (Financial Transactions)
+  // ----------------------------------------
+  async getFinancialTransactionTypes(): Promise<FinancialTransactionType[]> {
+    return withRTDBFallback(
+      async () => { const snap = await get(ref(rtdb!, 'financial_transaction_types')); return snapToArray<FinancialTransactionType>(snap); },
+      async () => JSON.parse(localStorage.getItem('financial_transaction_types') || '[]')
+    );
+  },
+
+  async getFinancialTransactions(monthCycle?: string, employeeId?: string): Promise<EmployeeFinancialTransaction[]> {
+    return withRTDBFallback(
+      async () => {
+        const snap = await get(ref(rtdb!, 'financial_transactions'));
+        let all = snapToArray<EmployeeFinancialTransaction>(snap);
+        if (monthCycle) all = all.filter(t => t.monthCycle === monthCycle);
+        if (employeeId) all = all.filter(t => t.employeeId === employeeId);
+        return all;
+      },
+      async () => {
+        let all: EmployeeFinancialTransaction[] = JSON.parse(localStorage.getItem('financial_transactions') || '[]');
+        if (monthCycle) all = all.filter(t => t.monthCycle === monthCycle);
+        if (employeeId) all = all.filter(t => t.employeeId === employeeId);
+        return all;
+      }
+    );
+  },
+
+  async addFinancialTransaction(transaction: EmployeeFinancialTransaction): Promise<void> {
+    return withRTDBFallback(
+      async () => { await set(ref(rtdb!, `financial_transactions/${transaction.id}`), transaction); },
+      async () => {
+        const all: EmployeeFinancialTransaction[] = JSON.parse(localStorage.getItem('financial_transactions') || '[]');
+        all.push(transaction);
+        localStorage.setItem('financial_transactions', JSON.stringify(all));
+      }
+    );
+  },
+
+  async updateFinancialTransaction(id: string, data: Partial<EmployeeFinancialTransaction>): Promise<void> {
+    return withRTDBFallback(
+      async () => { await update(ref(rtdb!, `financial_transactions/${id}`), { ...data, updatedAt: new Date().toISOString() }); },
+      async () => {
+        const all: EmployeeFinancialTransaction[] = JSON.parse(localStorage.getItem('financial_transactions') || '[]');
+        const idx = all.findIndex(t => t.id === id);
+        if (idx !== -1) {
+          all[idx] = { ...all[idx], ...data, updatedAt: new Date().toISOString() };
+          localStorage.setItem('financial_transactions', JSON.stringify(all));
+        }
+      }
+    );
+  },
+
+  async deleteFinancialTransaction(id: string): Promise<void> {
+    return withRTDBFallback(
+      async () => { await remove(ref(rtdb!, `financial_transactions/${id}`)); },
+      async () => {
+        const all: EmployeeFinancialTransaction[] = JSON.parse(localStorage.getItem('financial_transactions') || '[]');
+        const updated = all.filter(t => t.id !== id);
+        localStorage.setItem('financial_transactions', JSON.stringify(updated));
       }
     );
   },

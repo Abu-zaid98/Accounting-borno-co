@@ -172,8 +172,36 @@ export interface SalaryRecordDocument {
   deductions: number;
   advances: number;
   netSalary: number;
+  transactions?: EmployeeFinancialTransaction[]; // Snapshot of applied transactions
   status: 'unpaid' | 'paid';
   paidAt?: string;
+}
+
+export interface FinancialTransactionType {
+  id: string;
+  name: string;
+  category: 'BONUS' | 'DEDUCTION';
+  isSystem?: boolean; // If true, it cannot be deleted by normal users
+  createdAt: string;
+}
+
+export interface EmployeeFinancialTransaction {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  typeId: string;
+  typeName: string;
+  category: 'BONUS' | 'DEDUCTION';
+  title: string;
+  amount: number;
+  date: string; // YYYY-MM-DD
+  monthCycle: string; // YYYY-MM
+  source: 'manual' | 'system';
+  status: 'pending' | 'applied';
+  notes?: string;
+  addedBy: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface GeneralSettingsDocument {

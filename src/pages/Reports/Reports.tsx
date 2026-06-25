@@ -3,11 +3,11 @@ import { dbService } from '../../services/db';
 import type { EmployeeDocument, AttendanceDocument, OvertimeDocument, SalaryRecordDocument } from '../../types';
 import { useSettings } from '../../context/SettingsContext';
 import { formatCurrency } from '../../utils/currency';
-import { 
+import {
   Printer, FileSpreadsheet, Search, Calendar
 } from 'lucide-react';
 
-type ReportType = 'employees' | 'salaries' | 'attendance' | 'overtime';
+type ReportType = 'employees' | 'salaries' | 'attendance' | 'overtime' | 'financial_statement';
 
 export const Reports: React.FC = () => {
   const [reportType, setReportType] = useState<ReportType>('employees');
@@ -15,10 +15,12 @@ export const Reports: React.FC = () => {
   const [attendance, setAttendance] = useState<AttendanceDocument[]>([]);
   const [overtime, setOvertime] = useState<OvertimeDocument[]>([]);
   const [salaryRecords, setSalaryRecords] = useState<SalaryRecordDocument[]>([]);
-  
+  const [financialTransactions, setFinancialTransactions] = useState<import('../../types').EmployeeFinancialTransaction[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState('2026-05'); // YYYY-MM default
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const { settings } = useSettings();
   const currency = settings?.globalCurrency ?? settings?.currency ?? 'شيكل';
 
@@ -29,10 +31,12 @@ export const Reports: React.FC = () => {
       const atts = await dbService.getAttendance();
       const ovs = await dbService.getOvertimeRecords();
       const cycles = await dbService.getSalaryCycles();
+      const trans = await dbService.getFinancialTransactions();
 
       setEmployees(emps);
       setAttendance(atts);
       setOvertime(ovs);
+      setFinancialTransactions(trans);
 
       // Fetch all records for all cycles to aggregate if needed
       const allRecords: SalaryRecordDocument[] = [];
@@ -83,6 +87,13 @@ export const Reports: React.FC = () => {
       const ovs = overtime.filter(o => o.date.startsWith(selectedMonth));
       ovs.forEach(o => {
         csvContent += `${o.employeeName},${o.date},${o.hours},${o.hourlyRate},${o.totalAmount},${o.reason}\n`;
+      });
+    } else if (reportType === 'financial_statement') {
+      csvContent += "التاريخ,نوع الحركة,عنوان الحركة,المبلغ,الحالة,الشهر المالي\n";
+      const trans = financialTransactions.filter(t => t.employeeId === selectedEmployeeId);
+      trans.forEach(t => {
+        const amountSign = t.category === 'BONUS' ? '+' : '-';
+        csvContent += `${t.date},${t.typeName},${t.title},${amountSign}${t.amount},${t.status === 'applied' ? 'معتمدة' : 'قيد الانتظار'},${t.monthCycle}\n`;
       });
     }
 
@@ -159,11 +170,19 @@ export const Reports: React.FC = () => {
             >
               الإضافي
             </button>
+            <button
+              onClick={() => setReportType('financial_statement')}
+              className={`flex-1 py-2.5 text-[11px] font-bold text-center cursor-pointer transition-all border-r border-gray-200
+                ${reportType === 'financial_statement' ? 'bg-brand-950 text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}
+              `}
+            >
+              كشف حساب موظف
+            </button>
           </div>
         </div>
 
         {/* Date / Month Picker */}
-        {reportType !== 'employees' && (
+        {reportType !== 'employees' && reportType !== 'financial_statement' && (
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-gray-600">اختر الشهر المحاسبي</label>
             <div className="relative">
@@ -180,27 +199,46 @@ export const Reports: React.FC = () => {
           </div>
         )}
 
-        {/* Search */}
-        <div className="space-y-1.5 md:col-span-1">
-          <label className="text-xs font-bold text-gray-600">تصفية وبحث فوري</label>
-          <div className="relative">
-            <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 pointer-events-none">
-              <Search size={16} />
-            </span>
-            <input
-              type="text"
-              placeholder="البحث باسم الموظف أو البيانات المذكورة..."
-              className="w-full py-2.5 pr-10 pl-4 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-hidden"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+        {/* Employee Picker for Financial Statement */}
+        {reportType === 'financial_statement' && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-gray-600">اختر الموظف</label>
+            <select
+              className="w-full py-2.5 px-4 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:outline-hidden"
+              value={selectedEmployeeId}
+              onChange={(e) => setSelectedEmployeeId(e.target.value)}
+            >
+              <option value="">-- اختر الموظف --</option>
+              {employees.map(e => (
+                <option key={e.id} value={e.id}>{e.fullName}</option>
+              ))}
+            </select>
           </div>
-        </div>
+        )}
+
+        {/* Search */}
+        {reportType !== 'financial_statement' && (
+          <div className="space-y-1.5 md:col-span-1">
+            <label className="text-xs font-bold text-gray-600">تصفية وبحث فوري</label>
+            <div className="relative">
+              <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 pointer-events-none">
+                <Search size={16} />
+              </span>
+              <input
+                type="text"
+                placeholder="البحث باسم الموظف أو البيانات المذكورة..."
+                className="w-full py-2.5 pr-10 pl-4 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-hidden"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Printable Report Output Container */}
       <div className="bg-white rounded-3xl border border-brand-100 shadow-xs p-8 print:border-none print:shadow-none">
-        
+
         {/* Report Header for Print Only */}
         <div className="hidden print:flex items-center justify-between border-b-2 border-brand-950 pb-4 mb-6">
           <div>
@@ -220,6 +258,8 @@ export const Reports: React.FC = () => {
             {reportType === 'salaries' && `تقرير كشف الرواتب لشهر (${selectedMonth})`}
             {reportType === 'attendance' && `تقرير حضور وغياب الموظفين لشهر (${selectedMonth})`}
             {reportType === 'overtime' && `تقرير الساعات الإضافية المعتمدة لشهر (${selectedMonth})`}
+            {reportType === 'financial_statement' && selectedEmployeeId && `كشف حساب مالي للموظف: ${employees.find(e => e.id === selectedEmployeeId)?.fullName}`}
+            {reportType === 'financial_statement' && !selectedEmployeeId && `كشف حساب مالي للموظف (يرجى تحديد الموظف)`}
           </h2>
           <span className="text-[10px] text-gray-400 block mt-1">البورنو لإدارة متاجر تغليف الهدايا</span>
         </div>
@@ -369,6 +409,64 @@ export const Reports: React.FC = () => {
                 </tbody>
               </table>
             )}
+
+            {/* FINANCIAL STATEMENT REPORT */}
+            {reportType === 'financial_statement' && (
+              <table className="w-full text-right border-collapse text-xs border">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-300 font-bold text-gray-700">
+                    <th className="p-3 border">التاريخ</th>
+                    <th className="p-3 border">نوع الحركة المالية</th>
+                    <th className="p-3 border">التفاصيل / المبرر</th>
+                    <th className="p-3 border">المبلغ</th>
+                    <th className="p-3 border">الدورة المالية</th>
+                    <th className="p-3 border">حالة الحركة</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {financialTransactions
+                    .filter(t => t.employeeId === selectedEmployeeId)
+                    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                    .map(t => (
+                    <tr key={t.id}>
+                      <td className="p-3 border text-gray-600">{new Date(t.date).toLocaleDateString('ar-SA')}</td>
+                      <td className="p-3 border font-semibold text-gray-800">{t.typeName}</td>
+                      <td className="p-3 border text-gray-600">{t.title}</td>
+                      <td className="p-3 border font-bold text-left" dir="ltr">
+                        <span className={t.category === 'BONUS' ? 'text-green-600' : 'text-red-600'}>
+                          {t.category === 'BONUS' ? '+' : '-'}{formatCurrency(t.amount, currency)}
+                        </span>
+                      </td>
+                      <td className="p-3 border text-gray-500 font-medium">{t.monthCycle}</td>
+                      <td className="p-3 border font-bold text-brand-950">{t.status === 'applied' ? 'معتمدة ومقفلة' : 'قيد الانتظار'}</td>
+                    </tr>
+                  ))}
+                  {(!selectedEmployeeId || financialTransactions.filter(t => t.employeeId === selectedEmployeeId).length === 0) && (
+                    <tr>
+                      <td colSpan={6} className="p-6 text-center text-gray-400">
+                        {selectedEmployeeId ? 'لا توجد حركات مالية مسجلة لهذا الموظف.' : 'يرجى اختيار الموظف لعرض كشف الحساب الخاص به.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                {selectedEmployeeId && (
+                  <tfoot className="bg-gray-100 border-t-2 border-gray-300 font-bold">
+                    <tr>
+                      <td colSpan={3} className="p-4 border text-left text-gray-700">إجمالي الحركات (تراكمي)</td>
+                      <td className="p-4 border text-left text-brand-950 font-black text-sm" dir="ltr">
+                        {formatCurrency(
+                          financialTransactions
+                            .filter(t => t.employeeId === selectedEmployeeId)
+                            .reduce((sum, t) => sum + (t.category === 'BONUS' ? t.amount : -t.amount), 0),
+                          currency
+                        )}
+                      </td>
+                      <td colSpan={2} className="p-4 border"></td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            )}
           </div>
         )}
 
@@ -377,7 +475,7 @@ export const Reports: React.FC = () => {
           <div>
             <span className="font-bold text-[10px] text-gray-600 block">إعداد وتدقيق المحاسب المالي</span>
             <div className="h-12"></div>
-            <span className="text-gray-400 text-[10px] block">أحمد مراد - التوقيع</span>
+            <span className="text-gray-400 text-[10px] block">التوقيع</span>
           </div>
           <div>
             <span className="font-bold text-[10px] text-gray-600 block">اعتماد الإدارة والمدير العام</span>

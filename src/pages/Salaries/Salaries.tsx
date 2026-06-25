@@ -38,8 +38,9 @@ export const Salaries: React.FC = () => {
   const currencySymbol = settings?.globalCurrency ?? settings?.currency ?? '₪';
 
   // Edit Form States
-  const [manualBonuses, setManualBonuses] = useState<number>(0);
-  const [manualDeductions, setManualDeductions] = useState<number>(0);
+  const [adjustmentCategory, setAdjustmentCategory] = useState<'BONUS' | 'DEDUCTION'>('BONUS');
+  const [adjustmentAmount, setAdjustmentAmount] = useState<string>('');
+  const [adjustmentReason, setAdjustmentReason] = useState<string>('');
 
   // Print Ref
   const printComponentRef = useRef<HTMLDivElement>(null);
@@ -116,9 +117,28 @@ export const Salaries: React.FC = () => {
         processedAt: new Date().toISOString()
       };
 
+      // Fetch transaction types to find 'حسم غياب'
+      const fTypes = await dbService.getFinancialTransactionTypes();
+      const absenceType = fTypes.find(t => t.name === 'حسم غياب');
+
+      // Fetch all financial transactions for this cycle
+      const cycleTransactions = await dbService.getFinancialTransactions(cycleId);
+      
+      // If replacement, delete old system-generated ones
+      if (generateConfirm.isReplacement) {
+        for (const t of cycleTransactions) {
+          if (t.source === 'system') {
+            await dbService.deleteFinancialTransaction(t.id);
+          }
+        }
+      }
+
       // 2. Generate Records for all active employees
       const activeEmps = employees.filter(e => e.status === 'active');
       const salaryRecords: SalaryRecordDocument[] = [];
+
+      // Also get attendance array to reduce queries
+      const monthlyAttendance = await dbService.getAttendance();
 
       for (const emp of activeEmps) {
         // Calculate total overtime hours and amount in this month
@@ -127,15 +147,52 @@ export const Salaries: React.FC = () => {
         const totalOvsAmount = empOvs.reduce((sum, o) => sum + o.totalAmount, 0);
 
         // Fetch absent count from attendance for this month
-        const monthlyAttendance = await dbService.getAttendance();
         const absentCount = monthlyAttendance.filter(
           a => a.employeeId === emp.id && a.date.startsWith(cycleId) && a.status === 'absent'
         ).length;
 
         // Equation absent deduction
         const absentDeduction = Math.round((emp.basicSalary / 26) * absentCount);
+        
+        let newSysTransactions: import('../../types').EmployeeFinancialTransaction[] = [];
+        if (absentDeduction > 0 && absenceType) {
+          const absenceTrans: import('../../types').EmployeeFinancialTransaction = {
+            id: `ft_sys_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            employeeId: emp.id,
+            employeeName: emp.fullName,
+            typeId: absenceType.id,
+            typeName: absenceType.name,
+            category: absenceType.category,
+            title: `غياب ${absentCount} يوم`,
+            amount: absentDeduction,
+            date: new Date().toISOString().split('T')[0],
+            monthCycle: cycleId,
+            source: 'system',
+            status: 'applied',
+            addedBy: 'System',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          await dbService.addFinancialTransaction(absenceTrans);
+          newSysTransactions.push(absenceTrans);
+        }
 
-        const netSal = emp.basicSalary + totalOvsAmount - absentDeduction;
+        // Gather all applied/pending transactions for this employee
+        let empTransactions = cycleTransactions.filter(t => t.employeeId === emp.id && t.source !== 'system');
+        empTransactions = [...empTransactions, ...newSysTransactions];
+        
+        // Mark all as applied
+        for (const t of empTransactions) {
+          if (t.status === 'pending') {
+            await dbService.updateFinancialTransaction(t.id, { status: 'applied' });
+            t.status = 'applied'; // update locally for snapshot
+          }
+        }
+
+        const totalBonuses = empTransactions.filter(t => t.category === 'BONUS').reduce((s, t) => s + t.amount, 0);
+        const totalDeductions = empTransactions.filter(t => t.category === 'DEDUCTION').reduce((s, t) => s + t.amount, 0);
+
+        const netSal = emp.basicSalary + totalOvsAmount + totalBonuses - totalDeductions;
 
         salaryRecords.push({
           id: `${cycleId}_${emp.id}`,
@@ -147,9 +204,10 @@ export const Salaries: React.FC = () => {
           basicSalary: emp.basicSalary,
           overtimeHours: totalOvsHours,
           overtimeAmount: totalOvsAmount,
-          bonuses: 0,
-          deductions: absentDeduction,
+          bonuses: totalBonuses,
+          deductions: totalDeductions,
           netSalary: netSal,
+          transactions: empTransactions,
           status: 'unpaid',
           advances: 0
         });
@@ -172,25 +230,63 @@ export const Salaries: React.FC = () => {
 
   const handleOpenEditRecord = (rec: SalaryRecordDocument) => {
     setEditingRecord(rec);
-    setManualBonuses(rec.bonuses);
-    setManualDeductions(rec.deductions);
+    setAdjustmentCategory('BONUS');
+    setAdjustmentAmount('');
+    setAdjustmentReason('');
   };
 
   const handleSaveEditedRecord = async () => {
-    if (!editingRecord) return;
-
-    const netSal = editingRecord.basicSalary + editingRecord.overtimeAmount + manualBonuses - manualDeductions;
+    if (!editingRecord || !adjustmentAmount || Number(adjustmentAmount) <= 0 || !adjustmentReason) {
+      alert("الرجاء إدخال مبلغ ومبرر صحيح للتسوية");
+      return;
+    }
 
     try {
+      const fTypes = await dbService.getFinancialTransactionTypes();
+      const adjustType = fTypes.find(t => t.name === (adjustmentCategory === 'BONUS' ? 'تسوية راتب' : 'تسوية راتب (سالب)'));
+      
+      if (!adjustType) {
+        alert("نوع تسوية الراتب غير متوفر في الإعدادات");
+        return;
+      }
+
+      const newTrans: import('../../types').EmployeeFinancialTransaction = {
+        id: `ft_man_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        employeeId: editingRecord.employeeId,
+        employeeName: editingRecord.employeeName,
+        typeId: adjustType.id,
+        typeName: adjustType.name,
+        category: adjustType.category,
+        title: adjustmentReason,
+        amount: Number(adjustmentAmount),
+        date: new Date().toISOString().split('T')[0],
+        monthCycle: editingRecord.cycleId,
+        source: 'manual',
+        status: 'applied',
+        addedBy: "تعديل راتب",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      await dbService.addFinancialTransaction(newTrans);
+      
+      const newBonuses = editingRecord.bonuses + (adjustmentCategory === 'BONUS' ? Number(adjustmentAmount) : 0);
+      const newDeductions = editingRecord.deductions + (adjustmentCategory === 'DEDUCTION' ? Number(adjustmentAmount) : 0);
+      const newNetSal = editingRecord.basicSalary + editingRecord.overtimeAmount + newBonuses - newDeductions;
+      
+      const updatedTransactions = [...(editingRecord.transactions || []), newTrans];
+
       await dbService.updateSalaryRecord(editingRecord.id, {
-        bonuses: manualBonuses,
-        deductions: manualDeductions,
-        netSalary: netSal
+        bonuses: newBonuses,
+        deductions: newDeductions,
+        netSalary: newNetSal,
+        transactions: updatedTransactions
       });
+      
       setEditingRecord(null);
       await fetchRecords();
     } catch (error) {
-      alert("حدث خطأ أثناء تحديث بيانات الراتب.");
+      alert("حدث خطأ أثناء تحديث بيانات الراتب وتكوين التسوية.");
     }
   };
 
@@ -411,7 +507,7 @@ export const Salaries: React.FC = () => {
                                   <button
                                     onClick={() => handleOpenEditRecord(rec)}
                                     className="p-2 bg-brand-50 hover:bg-brand-100 text-brand-700 rounded-lg border border-brand-100 cursor-pointer"
-                                    title="تعديل المكافآت والخصومات"
+                                    title="إضافة تسوية مالية للراتب"
                                   >
                                     <Edit3 size={13} />
                                   </button>
@@ -465,7 +561,7 @@ export const Salaries: React.FC = () => {
         <div className="fixed inset-0 bg-brand-950/45 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-brand-100 overflow-hidden animate-scale-in max-h-[90svh] flex flex-col">
             <div className="px-6 py-4 border-b border-brand-100 flex items-center justify-between bg-brand-50/50">
-              <h2 className="font-bold text-gray-800 text-base">تعديل رواتب: {editingRecord.employeeName}</h2>
+              <h2 className="font-bold text-gray-800 text-base">تسوية راتب: {editingRecord.employeeName}</h2>
               <button onClick={() => setEditingRecord(null)} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
                 <X size={18} />
               </button>
@@ -485,23 +581,37 @@ export const Salaries: React.FC = () => {
 
               {/* Edit Bonuses */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-600">المكافآت الإضافية والعمولات ({currencySymbol})</label>
-                <input
-                  type="number"
-                  className="w-full py-2.5 px-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-right"
-                  value={manualBonuses}
-                  onChange={(e) => setManualBonuses(Number(e.target.value))}
-                />
+                <label className="text-xs font-bold text-gray-600">نوع التسوية</label>
+                <select
+                  className="w-full py-2.5 px-3 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none"
+                  value={adjustmentCategory}
+                  onChange={(e) => setAdjustmentCategory(e.target.value as 'BONUS' | 'DEDUCTION')}
+                >
+                  <option value="BONUS">مكافأة أو زيادة في الراتب</option>
+                  <option value="DEDUCTION">خصم أو استقطاع</option>
+                </select>
               </div>
 
               {/* Edit Deductions */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-600">الخصومات المباشرة والعقوبات ({currencySymbol})</label>
+                <label className="text-xs font-bold text-gray-600">قيمة التسوية ({currencySymbol})</label>
                 <input
                   type="number"
-                  className="w-full py-2.5 px-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-right"
-                  value={manualDeductions}
-                  onChange={(e) => setManualDeductions(Number(e.target.value))}
+                  placeholder="0"
+                  className="w-full py-2.5 px-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-right outline-none"
+                  value={adjustmentAmount}
+                  onChange={(e) => setAdjustmentAmount(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-600">مبرر التسوية المباشرة</label>
+                <input
+                  type="text"
+                  placeholder="مثال: تسوية رصيد سابق"
+                  className="w-full py-2.5 px-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-right outline-none"
+                  value={adjustmentReason}
+                  onChange={(e) => setAdjustmentReason(e.target.value)}
                 />
               </div>
 
@@ -509,7 +619,13 @@ export const Salaries: React.FC = () => {
               <div className="p-4 bg-brand-50 border border-brand-100 rounded-2xl text-xs text-brand-900 space-y-1">
                 <span className="font-bold text-brand-950 block">الصافي المتوقع للراتب:</span>
                 <p className="text-lg font-black text-brand-700">
-                  {formatCurrency(editingRecord.basicSalary + editingRecord.overtimeAmount + manualBonuses - manualDeductions, currencySymbol)}
+                  {formatCurrency(
+                    editingRecord.basicSalary + 
+                    editingRecord.overtimeAmount + 
+                    (editingRecord.bonuses + (adjustmentCategory === 'BONUS' ? Number(adjustmentAmount) : 0)) - 
+                    (editingRecord.deductions + (adjustmentCategory === 'DEDUCTION' ? Number(adjustmentAmount) : 0)), 
+                    currencySymbol
+                  )}
                 </p>
               </div>
 
@@ -614,16 +730,32 @@ export const Salaries: React.FC = () => {
                         <td className="p-3 text-gray-500">إجمالي {viewingPayslip.overtimeHours} ساعة دوام إضافي معتمد</td>
                         <td className="p-3 text-left font-semibold text-green-700">+{formatCurrency(viewingPayslip.overtimeAmount, currencySymbol)}</td>
                       </tr>
-                      <tr>
-                        <td className="p-3 font-bold text-gray-800">المكافآت والعمولات</td>
-                        <td className="p-3 text-gray-500">حوافز إنتاجية وتعديلات يدوية مالية</td>
-                        <td className="p-3 text-left font-semibold text-green-700">+{formatCurrency(viewingPayslip.bonuses, currencySymbol)}</td>
-                      </tr>
-                      <tr>
-                        <td className="p-3 font-bold text-gray-800 text-red-700">الاستقطاعات والخصومات</td>
-                        <td className="p-3 text-gray-500">أيام الغياب أو العقوبات أو الخصم المالي المباشر</td>
-                        <td className="p-3 text-left font-semibold text-red-600">-{formatCurrency(viewingPayslip.deductions, currencySymbol)}</td>
-                      </tr>
+                      {(viewingPayslip.transactions || []).map(t => (
+                        <tr key={t.id}>
+                          <td className={`p-3 font-bold ${t.category === 'BONUS' ? 'text-green-800' : 'text-red-800'}`}>
+                            {t.title}
+                          </td>
+                          <td className="p-3 text-gray-500">{t.typeName} - {t.date}</td>
+                          <td className={`p-3 text-left font-semibold ${t.category === 'BONUS' ? 'text-green-700' : 'text-red-600'}`}>
+                            {t.category === 'BONUS' ? '+' : '-'}{formatCurrency(t.amount, currencySymbol)}
+                          </td>
+                        </tr>
+                      ))}
+                      {/* For backward compatibility if there are bonuses without transactions */}
+                      {(!viewingPayslip.transactions || viewingPayslip.transactions.length === 0) && viewingPayslip.bonuses > 0 && (
+                        <tr>
+                          <td className="p-3 font-bold text-green-800">مكافآت وتعديلات سابقة</td>
+                          <td className="p-3 text-gray-500">مكافآت مجمعة في النظام القديم</td>
+                          <td className="p-3 text-left font-semibold text-green-700">+{formatCurrency(viewingPayslip.bonuses, currencySymbol)}</td>
+                        </tr>
+                      )}
+                      {(!viewingPayslip.transactions || viewingPayslip.transactions.length === 0) && viewingPayslip.deductions > 0 && (
+                        <tr>
+                          <td className="p-3 font-bold text-red-800">خصومات واستقطاعات سابقة</td>
+                          <td className="p-3 text-gray-500">خصومات مجمعة في النظام القديم</td>
+                          <td className="p-3 text-left font-semibold text-red-600">-{formatCurrency(viewingPayslip.deductions, currencySymbol)}</td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>

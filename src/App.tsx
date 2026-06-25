@@ -17,6 +17,7 @@ import { Salaries } from './pages/Salaries/Salaries';
 import { Reports } from './pages/Reports/Reports';
 import { Users } from './pages/Users/Users';
 import { Settings } from './pages/Settings/Settings';
+import { FinancialTransactions } from './pages/FinancialTransactions/FinancialTransactions';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -69,6 +70,16 @@ export const App: React.FC = () => {
                 element={
                   <ProtectedRoute permission="overtime.view">
                     <Overtime />
+                  </ProtectedRoute>
+                } 
+              />
+
+              {/* Financial Transactions */}
+              <Route 
+                path="financial-transactions" 
+                element={
+                  <ProtectedRoute permission="employee-financial-transactions.view">
+                    <FinancialTransactions />
                   </ProtectedRoute>
                 } 
               />

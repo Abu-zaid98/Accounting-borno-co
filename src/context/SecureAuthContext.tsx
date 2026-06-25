@@ -163,21 +163,27 @@ export const SecureAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // Permission checking helpers
   const hasPermission = useCallback(
     (permission: string): boolean => {
-      return session ? sessionValidationService.hasPermission(session, permission) : false;
+      if (!session) return false;
+      if (session.role === 'super_admin') return true;
+      return sessionValidationService.hasPermission(session, permission);
     },
     [session]
   );
 
   const hasAnyPermission = useCallback(
     (permissions: string[]): boolean => {
-      return session ? sessionValidationService.hasAnyPermission(session, permissions) : false;
+      if (!session) return false;
+      if (session.role === 'super_admin') return true;
+      return sessionValidationService.hasAnyPermission(session, permissions);
     },
     [session]
   );
 
   const hasAllPermissions = useCallback(
     (permissions: string[]): boolean => {
-      return session ? sessionValidationService.hasAllPermissions(session, permissions) : false;
+      if (!session) return false;
+      if (session.role === 'super_admin') return true;
+      return sessionValidationService.hasAllPermissions(session, permissions);
     },
     [session]
   );

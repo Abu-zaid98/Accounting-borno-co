@@ -146,16 +146,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const hasPermission = useCallback((permission: string): boolean => {
     if (!session) return false;
+    if (session.role === 'super_admin') return true;
     return userService.hasPermission(session.permissions, permission);
   }, [session]);
 
   const hasAnyPermission = useCallback((permissions: string[]): boolean => {
     if (!session) return false;
+    if (session.role === 'super_admin') return true;
     return userService.hasAnyPermission(session.permissions, permissions);
   }, [session]);
 
   const hasAllPermissions = useCallback((permissions: string[]): boolean => {
     if (!session) return false;
+    if (session.role === 'super_admin') return true;
     return userService.hasAllPermissions(session.permissions, permissions);
   }, [session]);
 

@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { 
   LayoutDashboard, Users, CalendarClock, Timer, 
-  Wallet, FileBarChart, Settings, LogOut, ShieldCheck, Gift 
+  Wallet, FileBarChart, Settings, LogOut, ShieldCheck, Gift, WalletCards 
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -39,6 +39,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       label: 'الساعات الإضافية',
       icon: <Timer size={20} />,
       permission: 'overtime.view'
+    },
+    {
+      path: '/financial-transactions',
+      label: 'الحركات المالية',
+      icon: <WalletCards size={20} />,
+      permission: 'employee-financial-transactions.view'
     },
     {
       path: '/salaries',

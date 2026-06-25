@@ -65,7 +65,11 @@ export const Users: React.FC = () => {
     { id: '27', key: 'departments.create', label: 'إضافة قسم جديد', category: 'employees' as const },
     { id: '28', key: 'departments.edit', label: 'تعديل الأقسام', category: 'employees' as const },
     { id: '29', key: 'departments.delete', label: 'حذف الأقسام', category: 'employees' as const },
-    { id: '30', key: 'dashboard.view', label: 'عرض لوحة القيادة (الرئيسية)', category: 'settings' as const }
+    { id: '30', key: 'dashboard.view', label: 'عرض لوحة القيادة (الرئيسية)', category: 'settings' as const },
+    { id: '31', key: 'employee-financial-transactions.view', label: 'عرض الحركات المالية', category: 'employees' as const },
+    { id: '32', key: 'employee-financial-transactions.create', label: 'إضافة حركة مالية', category: 'employees' as const },
+    { id: '33', key: 'employee-financial-transactions.edit', label: 'تعديل الحركات المالية', category: 'employees' as const },
+    { id: '34', key: 'employee-financial-transactions.delete', label: 'حذف الحركات المالية', category: 'employees' as const }
   ];
 
   const fetchUsers = async () => {
@@ -84,14 +88,17 @@ export const Users: React.FC = () => {
     }
   };
 
-  const availablePermissions = permissions.length > 0 ? permissions : fallbackPermissions.map((p) => ({
-    id: p.id,
-    key: p.key,
-    label: p.label,
-    category: p.category,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  }));
+  const availablePermissions = fallbackPermissions.map((p) => {
+    const existing = permissions.find(dbP => dbP.key === p.key);
+    return existing || {
+      id: p.id,
+      key: p.key,
+      label: p.label,
+      category: p.category,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  });
 
   useEffect(() => {
     fetchUsers();

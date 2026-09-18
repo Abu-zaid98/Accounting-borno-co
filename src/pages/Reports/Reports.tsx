@@ -6,6 +6,7 @@ import { formatCurrency } from '../../utils/currency';
 import {
   Printer, FileSpreadsheet, Search, Calendar
 } from 'lucide-react';
+import { LoadingState } from '../../components/ui/LoadingState';
 
 type ReportType = 'employees' | 'salaries' | 'attendance' | 'overtime' | 'financial_statement';
 
@@ -266,7 +267,11 @@ export const Reports: React.FC = () => {
 
         {/* Report Content Table */}
         {loading ? (
-          <div className="p-8 text-center text-xs text-gray-400">جاري تجميع البيانات وتوليد التقرير...</div>
+          <LoadingState
+            message="جارٍ تجميع بيانات التقرير..."
+            subMessage="يتم معالجة سجلات الحضور والرواتب والمعاملات المالية"
+            variant="card"
+          />
         ) : (
           <div className="overflow-x-auto">
             {/* EMPLOYEES REPORT */}

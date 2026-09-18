@@ -139,13 +139,18 @@ export const Settings: React.FC = () => {
           </div>
 
           <div className="space-y-4 pt-6 border-t border-brand-50">
-            <h3 className="font-bold text-gray-800 text-xs border-r-4 border-gold-500 pr-2 flex items-center gap-1.5">
-              <Timer size={16} className="text-gray-500" />
-              <span>إعدادات الحضور والشفتات</span>
-            </h3>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
+              <h3 className="font-bold text-gray-800 text-xs border-r-4 border-gold-500 pr-2 flex items-center gap-1.5">
+                <Timer size={16} className="text-gray-500" />
+                <span>مواعيد وردية الدوام (تُطبَّق على كامل النظام)</span>
+              </h3>
+              <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full">
+                تؤثر على: الموظفين • الحضور • تقارير الدوام • QR Scanner
+              </span>
+            </div>
 
-            <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 mb-6">
-              <div className="max-w-xs space-y-2">
+            <div className="bg-brand-50/60 p-4 rounded-2xl border border-brand-100 mb-4">
+              <div className="max-w-sm space-y-2">
                 <label className="text-xs font-bold text-gray-800">نوع الشفت الافتراضي للمتجر</label>
                 <select
                   disabled={!canEdit}
@@ -157,16 +162,40 @@ export const Settings: React.FC = () => {
                   <option value="evening">الشفت المسائي</option>
                 </select>
                 <p className="text-[10px] text-gray-500 leading-relaxed">
-                  سيتم اعتماد هذا الشفت كافتراضي للموظفين الجدد وسيتم تطبيق قوانينه بشكل أساسي عند حساب التأخير والغياب ما لم يتم تخصيص شفت للموظف.
+                  الشفت الافتراضي للموظفين الجدد. يمكن تخصيص شفت مختلف لكل موظف من صفحة الموظفين.
                 </p>
+              </div>
+            </div>
+
+            {/* Live preview */}
+            <div className="flex items-center gap-3 p-3 bg-emerald-50/70 border border-emerald-200 rounded-2xl mb-2">
+              <div className="text-emerald-600">
+                <Timer size={16} />
+              </div>
+              <div className="text-[11px] text-emerald-800">
+                <span className="font-black">معاينة مباشرة — </span>
+                <span>الصباحي: </span>
+                <strong>{shiftDrafts.morning.workStartTime} → {shiftDrafts.morning.workEndTime}</strong>
+                <span className="mx-2">|</span>
+                <span>المسائي: </span>
+                <strong>{shiftDrafts.evening.workStartTime} → {shiftDrafts.evening.workEndTime}</strong>
               </div>
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               {(Object.keys(shiftDrafts) as ShiftType[]).map((shift) => (
-                <div key={shift} className="border border-brand-100 rounded-2xl p-4 bg-gray-50/40 space-y-3">
+                <div key={shift} className={`border rounded-2xl p-4 space-y-3 ${
+                  shift === shiftType
+                    ? 'border-brand-400 bg-brand-50/60 ring-1 ring-brand-200'
+                    : 'border-brand-100 bg-gray-50/40'
+                }`}>
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-black text-brand-900">نظام دوام {shiftLabels[shift]}</h4>
+                    <h4 className="text-xs font-black text-brand-900">
+                      نظام دوام {shiftLabels[shift]}
+                      {shift === shiftType && (
+                        <span className="mr-2 text-[10px] font-bold bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full">الافتراضي</span>
+                      )}
+                    </h4>
                     <span className="text-[10px] font-bold text-gray-400">قاعدة حالية</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -29,7 +29,7 @@ export const Login: React.FC = () => {
         <div className="absolute bottom-1/4 right-1/4 w-[30rem] h-[30rem] bg-indigo-600/20 rounded-full blur-3xl mix-blend-screen animate-pulse" style={{ animationDelay: '2s' }} />
       </div>
 
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
@@ -41,7 +41,7 @@ export const Login: React.FC = () => {
 
           {/* Logo Section */}
           <div className="flex flex-col items-center mb-10">
-            <motion.div 
+            <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
@@ -52,13 +52,13 @@ export const Login: React.FC = () => {
             <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-500 mb-1">
               البورنو المحاسبي
             </h1>
-            <p className="text-slate-300/80 text-sm tracking-widest mt-1">النظام الإداري والمالي الفاخر</p>
+            <p className="text-slate-300/80 text-sm tracking-widest mt-1">النظام الإداري والمالي</p>
           </div>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-center"

@@ -8,10 +8,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as zod from 'zod';
 import {
   Users, Plus, Search, Filter, Edit, Trash2, Archive,
-  X, Check, AlertCircle, Briefcase
+  X, Check, AlertCircle, Briefcase, QrCode
 } from 'lucide-react';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { useAuth } from '../../context/AuthContext';
+import { EmployeeQrModal } from '../../components/employees/EmployeeQrModal';
+import { LoadingState } from '../../components/ui/LoadingState';
 
 const employeeSchema = zod.object({
   fullName: zod.string().min(3, 'الاسم الكامل يجب أن لا يقل عن 3 أحرف'),
@@ -47,6 +49,7 @@ export const Employees: React.FC = () => {
   const [deptFilter, setDeptFilter] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<EmployeeDocument | null>(null);
+  const [selectedQrEmployee, setSelectedQrEmployee] = useState<EmployeeDocument | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<EmployeeDocument | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EmployeeDocument | null>(null);
@@ -57,6 +60,7 @@ export const Employees: React.FC = () => {
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<EmployeeFormFields>({
     resolver: zodResolver(employeeSchema),
@@ -77,6 +81,16 @@ export const Employees: React.FC = () => {
       status: 'active',
       avatarUrl: '',
     }
+  });
+
+  /** حساب أوقات الشفت من الإعدادات أو القيم الافتراضية الثابتة */
+  const getShiftDefaults = (shiftType: 'morning' | 'evening') => ({
+    shiftStartTime:
+      settings?.shifts?.[shiftType]?.workStartTime ??
+      (shiftType === 'evening' ? '12:00' : '09:00'),
+    shiftEndTime:
+      settings?.shifts?.[shiftType]?.workEndTime ??
+      (shiftType === 'evening' ? '21:00' : '18:00'),
   });
 
   const fetchEmployees = async () => {
@@ -105,8 +119,8 @@ export const Employees: React.FC = () => {
       department: '',
       basicSalary: 4000,
       shiftType: settings?.shiftType ?? 'morning',
-      shiftStartTime: settings?.workStartTime ?? '08:00',
-      shiftEndTime: settings?.workEndTime ?? '16:00',
+      shiftStartTime: settings?.shifts?.[settings?.shiftType ?? 'morning']?.workStartTime ?? settings?.workStartTime ?? '09:00',
+      shiftEndTime: settings?.shifts?.[settings?.shiftType ?? 'morning']?.workEndTime ?? settings?.workEndTime ?? '18:00',
       gracePeriodMinutes: settings?.gracePeriodMinutes ?? 10,
       lateAfterMinutes: settings?.lateRule?.afterMinutes ?? 10,
       absenceAfterMinutes: settings?.absenceRule?.afterMinutes ?? 240,
@@ -128,8 +142,8 @@ export const Employees: React.FC = () => {
       department: emp.department,
       basicSalary: emp.basicSalary,
       shiftType: emp.shiftType ?? settings?.shiftType ?? 'morning',
-      shiftStartTime: emp.shiftStartTime ?? settings?.workStartTime ?? '08:00',
-      shiftEndTime: emp.shiftEndTime ?? settings?.workEndTime ?? '16:00',
+      shiftStartTime: emp.shiftStartTime ?? settings?.shifts?.[emp.shiftType ?? 'morning']?.workStartTime ?? settings?.workStartTime ?? '09:00',
+      shiftEndTime: emp.shiftEndTime ?? settings?.shifts?.[emp.shiftType ?? 'morning']?.workEndTime ?? settings?.workEndTime ?? '18:00',
       gracePeriodMinutes: emp.gracePeriodMinutes ?? settings?.gracePeriodMinutes ?? 10,
       lateAfterMinutes: emp.lateRule?.afterMinutes ?? settings?.lateRule?.afterMinutes ?? 10,
       absenceAfterMinutes: emp.absenceRule?.afterMinutes ?? settings?.absenceRule?.afterMinutes ?? 240,
@@ -314,11 +328,11 @@ export const Employees: React.FC = () => {
       {/* Employees Data Table */}
       <div className="bg-white rounded-3xl border border-brand-100 shadow-xs overflow-hidden">
         {loading ? (
-          <div className="p-8 space-y-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-16 bg-gray-50 animate-pulse rounded-2xl"></div>
-            ))}
-          </div>
+          <LoadingState
+            message="جارٍ تحميل بيانات وسجلات الموظفين..."
+            subMessage="يتم جلب الملفات الوظيفية والرواتب والورديات"
+            variant="card"
+          />
         ) : filteredEmployees.length === 0 ? (
           <div className="p-16 text-center space-y-3">
             <Users size={48} className="mx-auto text-gray-300 animate-bounce" />
@@ -371,6 +385,15 @@ export const Employees: React.FC = () => {
                     <td className="p-4.5">{getStatusBadge(emp.status)}</td>
                     <td className="p-4.5 text-center no-print">
                       <div className="flex items-center justify-center gap-2">
+                        {/* بطاقة الـ QR */}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedQrEmployee(emp)}
+                          className="p-2 bg-gold-50 hover:bg-gold-100 text-gold-700 rounded-lg transition-all border border-gold-200 cursor-pointer shadow-xs"
+                          title="عرض وطباعة بطاقة الـ QR"
+                        >
+                          <QrCode size={14} />
+                        </button>
                         {canEdit && (
                           <>
                             <button
@@ -535,16 +558,84 @@ export const Employees: React.FC = () => {
                   {errors.basicSalary && <p className="text-red-500 text-[10px]">{errors.basicSalary.message}</p>}
                 </div>
 
-                {/* Hire Date */}
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-600">نوع الشفت</label>
-                  <select
-                    className="w-full py-2.5 px-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-brand-500 focus:bg-white text-right"
-                    {...register('shiftType')}
-                  >
-                    <option value="morning">صباحي</option>
-                    <option value="evening">مسائي</option>
-                  </select>
+                {/* Schedule & Shift Settings */}
+                <div className="sm:col-span-2 p-3.5 bg-brand-50/60 rounded-2xl border border-brand-100/80 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <label className="text-xs font-bold text-brand-950 block">جدول ومواعيد دوام الموظف</label>
+                      <span className="text-[10px] text-brand-600">يحدد يدوياً Start Time و End Time (الدوام يتبع جدول الموظف)</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const def = getShiftDefaults('morning');
+                          setValue('shiftType', 'morning');
+                          setValue('shiftStartTime', def.shiftStartTime);
+                          setValue('shiftEndTime', def.shiftEndTime);
+                        }}
+                        className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-white hover:bg-brand-100 text-brand-800 border border-brand-200 transition-all cursor-pointer shadow-xs"
+                      >
+                        صباحي ({getShiftDefaults('morning').shiftStartTime} - {getShiftDefaults('morning').shiftEndTime})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const def = getShiftDefaults('evening');
+                          setValue('shiftType', 'evening');
+                          setValue('shiftStartTime', def.shiftStartTime);
+                          setValue('shiftEndTime', def.shiftEndTime);
+                        }}
+                        className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-white hover:bg-brand-100 text-brand-800 border border-brand-200 transition-all cursor-pointer shadow-xs"
+                      >
+                        مسائي ({getShiftDefaults('evening').shiftStartTime} - {getShiftDefaults('evening').shiftEndTime})
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-700">نوع الوردية</label>
+                      <select
+                        className="w-full py-2 px-3 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-brand-500 text-right"
+                        {...register('shiftType')}
+                        onChange={(e) => {
+                          const val = e.target.value as 'morning' | 'evening';
+                          const def = getShiftDefaults(val);
+                          setValue('shiftType', val);
+                          setValue('shiftStartTime', def.shiftStartTime);
+                          setValue('shiftEndTime', def.shiftEndTime);
+                        }}
+                      >
+                        <option value="morning">وردية صباحية (Morning)</option>
+                        <option value="evening">وردية مسائية (Evening)</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-700">وقت البدء (Start Time)</label>
+                      <input
+                        type="time"
+                        className={`w-full py-2 px-3 bg-white border rounded-xl text-xs focus:ring-2 focus:ring-brand-500 text-right
+                          ${errors.shiftStartTime ? 'border-red-400' : 'border-gray-200'}
+                        `}
+                        {...register('shiftStartTime')}
+                      />
+                      {errors.shiftStartTime && <p className="text-red-500 text-[10px]">{errors.shiftStartTime.message}</p>}
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-gray-700">وقت الانتهاء (End Time)</label>
+                      <input
+                        type="time"
+                        className={`w-full py-2 px-3 bg-white border rounded-xl text-xs focus:ring-2 focus:ring-brand-500 text-right
+                          ${errors.shiftEndTime ? 'border-red-400' : 'border-gray-200'}
+                        `}
+                        {...register('shiftEndTime')}
+                      />
+                      {errors.shiftEndTime && <p className="text-red-500 text-[10px]">{errors.shiftEndTime.message}</p>}
+                    </div>
+                  </div>
                 </div>
 
 
@@ -637,6 +728,12 @@ export const Employees: React.FC = () => {
         variant="danger"
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      {/* نافذة عرض وطباعة بطاقة الـ QR للموظف */}
+      <EmployeeQrModal
+        employee={selectedQrEmployee}
+        onClose={() => setSelectedQrEmployee(null)}
       />
     </div>
   );

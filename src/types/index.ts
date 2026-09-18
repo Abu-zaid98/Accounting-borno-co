@@ -90,6 +90,13 @@ export interface EmployeeDocument {
   updatedAt: string;
 }
 
+export interface TemporaryExitRecord {
+  id: string;
+  exitTime: string; // ISO string
+  returnTime?: string; // ISO string
+  reason?: string;
+}
+
 export interface AttendanceDocument {
   id: string; // employeeId_YYYYMMDD
   employeeId: string;
@@ -102,6 +109,7 @@ export interface AttendanceDocument {
   shiftType?: ShiftType;
   scheduledStartTime?: string;
   scheduledEndTime?: string;
+  temporaryExits?: TemporaryExitRecord[];
   isManualOverride?: boolean;
   overrideReason?: string;
   auditTrail?: AttendanceAuditLog[];
@@ -111,7 +119,7 @@ export interface AttendanceDocument {
 
 export type ShiftType = 'morning' | 'evening';
 
-export type AttendanceStatus = 'present' | 'late' | 'absent' | 'outside_shift';
+export type AttendanceStatus = 'present' | 'temporary_exit' | 'checked_out' | 'absent' | 'late' | 'outside_shift';
 
 export interface AttendanceRule {
   afterMinutes: number;
@@ -128,7 +136,7 @@ export interface AttendanceShiftSettings {
 
 export interface AttendanceAuditLog {
   id: string;
-  action: 'manual_override' | 'check_in' | 'check_out' | 'mark_absent';
+  action: 'manual_override' | 'check_in' | 'check_out' | 'mark_absent' | 'temporary_exit' | 'temporary_return';
   changedBy: string;
   changedAt: string;
   reason?: string;

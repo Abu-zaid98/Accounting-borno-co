@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrency } from '../../utils/currency';
+import { LoadingState } from '../../components/ui/LoadingState';
 
 export const Dashboard: React.FC = () => {
   const { hasPermission } = useAuth();
@@ -56,17 +57,11 @@ export const Dashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-32 bg-white rounded-3xl animate-pulse border border-brand-100"></div>
-          ))}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="h-96 bg-white rounded-3xl lg:col-span-2 animate-pulse border border-brand-100"></div>
-          <div className="h-96 bg-white rounded-3xl animate-pulse border border-brand-100"></div>
-        </div>
-      </div>
+      <LoadingState
+        message="جارٍ تحميل لوحة المؤشرات والإحصائيات المحاسبية..."
+        subMessage="يتم جلب وتحديث بيانات الموظفين وساعات الدوام والمصروفات"
+        variant="page"
+      />
     );
   }
 

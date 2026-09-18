@@ -5,6 +5,7 @@ import { Plus, Edit, Trash2, Shield, UserX, UserCheck, X, Check, AlertCircle, Ke
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { useToast } from '../../components/ui/Toast';
 import { useAuth } from '../../context/AuthContext';
+import { LoadingState } from '../../components/ui/LoadingState';
 import bcrypt from 'bcryptjs';
 
 export const Users: React.FC = () => {
@@ -325,11 +326,11 @@ export const Users: React.FC = () => {
       {/* Users table */}
       <div className="bg-white rounded-3xl border border-brand-100 shadow-xs overflow-hidden">
         {loading ? (
-          <div className="p-8 space-y-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-16 bg-gray-50 animate-pulse rounded-2xl"></div>
-            ))}
-          </div>
+          <LoadingState
+            message="جارٍ تحميل بيانات المستخدمين وصلاحيات النظام..."
+            subMessage="يتم فحص الأدوار والتحقق الأمني من الجلسات"
+            variant="card"
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-right border-collapse">
@@ -349,9 +350,9 @@ export const Users: React.FC = () => {
                     <td className="p-4.5 font-bold text-gray-800">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-lg bg-brand-50 text-brand-700 flex items-center justify-center font-bold">
-                          {u.fullName.charAt(0)}
+                          {(u.fullName || u.email || '?').charAt(0)}
                         </div>
-                        <span>{u.fullName}</span>
+                        <span>{u.fullName || u.email || 'مستخدم'}</span>
                       </div>
                     </td>
                     <td className="p-4.5 text-gray-600 font-medium">{u.username || u.email}</td>

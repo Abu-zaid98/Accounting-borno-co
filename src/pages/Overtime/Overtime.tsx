@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { useAuth } from '../../context/AuthContext';
+import { LoadingState } from '../../components/ui/LoadingState';
 
 const overtimeSchema = zod.object({
   employeeId: zod.string().min(1, 'يرجى اختيار الموظف'),
@@ -217,11 +218,11 @@ export const Overtime: React.FC = () => {
       {/* Overtime Logs List */}
       <div className="bg-white rounded-3xl border border-brand-100 shadow-xs overflow-hidden">
         {loading ? (
-          <div className="p-8 space-y-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-16 bg-gray-50 animate-pulse rounded-2xl"></div>
-            ))}
-          </div>
+          <LoadingState
+            message="جارٍ تحميل سجلات الساعات الإضافية المعتمدة..."
+            subMessage="يتم احتساب مستحقات الموظفين من قاعدة البيانات"
+            variant="card"
+          />
         ) : filteredRecords.length === 0 ? (
           <div className="p-16 text-center space-y-3">
             <Timer size={48} className="mx-auto text-gray-300 animate-pulse" />

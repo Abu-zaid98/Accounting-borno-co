@@ -1,0 +1,42 @@
+{
+  "name": "البورنو لخدمات تغليف الهدايا الراقية",
+  "short_name": "البورنو",
+  "description": "النظام المحاسبي وإدارة الموظفين والدوام الذكي",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#24121a",
+  "theme_color": "#361e28",
+  "orientation": "portrait-primary",
+  "dir": "rtl",
+  "lang": "ar",
+  "categories": ["business", "productivity", "finance"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "تسجيل الحضور QR",
+      "short_name": "الباركود",
+      "url": "/attendance",
+      "icons": [{ "src": "/favicon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "ساعات العمل الشهرية",
+      "short_name": "الساعات",
+      "url": "/attendance?tab=monthly",
+      "icons": [{ "src": "/favicon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "كشف الرواتب",
+      "short_name": "الرواتب",
+      "url": "/salaries",
+      "icons": [{ "src": "/favicon.svg", "sizes": "192x192" }]
+    }
+  ]
+}

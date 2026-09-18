@@ -99,12 +99,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       )}
 
       <aside className={`
-        fixed top-0 bottom-0 right-0 w-72 bg-brand-950 text-white z-50 flex flex-col
-        transition-transform duration-300 lg:translate-x-0 lg:static shadow-2xl border-l border-brand-900/50
+        fixed inset-y-0 right-0 w-72 h-screen bg-brand-950 text-white z-50 flex flex-col overflow-hidden
+        transition-transform duration-300 shadow-2xl border-l border-brand-900/50
+        lg:translate-x-0 lg:static lg:shrink-0 lg:w-72 lg:h-screen
         ${isOpen ? 'translate-x-0' : 'translate-x-full'}
       `}>
         {/* Header / Logo */}
-        <div className="h-20 flex items-center gap-3 px-6 border-b border-brand-900/30">
+        <div className="h-20 shrink-0 flex items-center gap-3 px-6 border-b border-brand-900/30">
           <div className="w-10 h-10 rounded-xl bg-gold-400 flex items-center justify-center text-brand-950 shadow-md">
             <Gift size={24} className="animate-bounce" />
           </div>
@@ -114,8 +115,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
           </div>
         </div>
 
-        {/* Navigation Menu */}
-        <nav className="flex-1 overflow-y-auto px-4 py-6 space-y-1.5 scrollbar-thin">
+        {/* Navigation Menu (Independent internal scroll) */}
+        <nav className="flex-1 overflow-y-auto px-4 py-6 space-y-1.5 scrollbar-thin overscroll-contain">
           {filteredMenu.map(item => (
             <NavLink
               key={item.path}
@@ -137,7 +138,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 
         {/* User Card at bottom */}
         {user && (
-          <div className="p-4 border-t border-brand-900/30 bg-brand-900/20">
+          <div className="shrink-0 p-4 border-t border-brand-900/30 bg-brand-900/20">
             <div className="flex items-center gap-3 p-2 bg-brand-900/40 rounded-xl mb-3">
               <div className="w-10 h-10 rounded-lg bg-gold-500/10 border border-gold-500/30 flex items-center justify-center font-bold text-gold-400 text-base">
                 {user.fullName.charAt(0)}

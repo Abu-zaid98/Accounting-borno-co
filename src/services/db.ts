@@ -467,6 +467,32 @@ export const dbService = {
     );
   },
 
+  async recordAttendanceBatch(attendances: AttendanceDocument[]): Promise<void> {
+    if (!attendances.length) return;
+    const sanitizedList = attendances.map((a) => removeUndefinedDeep(a));
+    return withRTDBFallback(
+      async () => {
+        const updates: Record<string, any> = {};
+        for (const item of sanitizedList) {
+          updates[`attendance/${item.id}`] = item;
+        }
+        await update(ref(rtdb!), updates);
+      },
+      async () => {
+        const all = await this.getAttendance();
+        for (const item of sanitizedList) {
+          const idx = all.findIndex((a) => a.id === item.id);
+          if (idx !== -1) {
+            all[idx] = item as AttendanceDocument;
+          } else {
+            all.push(item as AttendanceDocument);
+          }
+        }
+        localStorage.setItem('attendance', JSON.stringify(all));
+      }
+    );
+  },
+
 
   async deleteAttendance(id: string): Promise<void> {
     return withRTDBFallback(

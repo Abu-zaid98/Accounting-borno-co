@@ -90,7 +90,7 @@ export const Employees: React.FC = () => {
       (shiftType === 'evening' ? '12:00' : '09:00'),
     shiftEndTime:
       settings?.shifts?.[shiftType]?.workEndTime ??
-      (shiftType === 'evening' ? '21:00' : '18:00'),
+      (shiftType === 'evening' ? '20:00' : '18:00'),
   });
 
   const fetchEmployees = async () => {

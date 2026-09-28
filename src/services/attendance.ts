@@ -20,7 +20,7 @@ export const DEFAULT_SHIFT_MORNING: AttendanceShiftSettings = {
 export const DEFAULT_SHIFT_EVENING: AttendanceShiftSettings = {
   shiftType: 'evening',
   workStartTime: '12:00',
-  workEndTime: '21:00',
+  workEndTime: '20:00',
   gracePeriodMinutes: 0,
   lateRule: { afterMinutes: 0 },
   absenceRule: { afterMinutes: 480 },
@@ -54,11 +54,21 @@ export const getShiftSettings = (
   const defaultBase = shiftType === 'evening' ? DEFAULT_SHIFT_EVENING : DEFAULT_SHIFT_MORNING;
   const configuredShift = settings.shifts?.[shiftType] ?? defaultBase;
 
+  // For evening, strictly ensure 12:00 - 20:00 without leaking morning employee.shiftStartTime
+  const workStartTime =
+    shiftType === 'evening'
+      ? (configuredShift.workStartTime || '12:00')
+      : (employee?.shiftStartTime || configuredShift.workStartTime);
+  const workEndTime =
+    shiftType === 'evening'
+      ? (configuredShift.workEndTime || '20:00')
+      : (employee?.shiftEndTime || configuredShift.workEndTime);
+
   return {
     ...configuredShift,
     shiftType,
-    workStartTime: employee?.shiftStartTime || configuredShift.workStartTime,
-    workEndTime: employee?.shiftEndTime || configuredShift.workEndTime,
+    workStartTime,
+    workEndTime,
     gracePeriodMinutes: 0,
     lateRule: { afterMinutes: 0 },
     absenceRule: { afterMinutes: 480 },

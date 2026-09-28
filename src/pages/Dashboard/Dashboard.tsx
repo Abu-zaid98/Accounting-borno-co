@@ -5,7 +5,7 @@ import { dbService } from '../../services/db';
 import type { EmployeeDocument, AttendanceDocument, OvertimeDocument } from '../../types';
 import {
   Users, CalendarClock, Ban, Timer, Wallet,
-  ArrowUpRight, ArrowDownRight, Plus, UserCheck, Clock
+  ArrowUpRight, ArrowDownRight, Plus, UserCheck, Clock, Sparkles
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useSettings } from '../../context/SettingsContext';
@@ -101,6 +101,15 @@ export const Dashboard: React.FC = () => {
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
+            {hasPermission('attendance.create') && (
+              <Link
+                to="/attendance"
+                className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-xl font-bold text-xs transition-all shadow-md flex items-center gap-1.5 cursor-pointer border border-emerald-400/40"
+              >
+                <Sparkles size={16} className="text-emerald-200" />
+                <span>حضور سريع وجماعي</span>
+              </Link>
+            )}
             {hasPermission('attendance.view') && (
               <Link
                 to="/attendance"

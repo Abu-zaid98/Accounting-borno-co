@@ -9,6 +9,7 @@ import type {
   AttendanceStatus,
   EmployeeDocument,
   GeneralSettingsDocument,
+  ShiftType,
   TemporaryExitRecord,
 } from '../../types';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
@@ -16,6 +17,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../components/ui/Toast';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { QrAttendanceScanner } from '../../components/attendance/QrAttendanceScanner';
+import { QuickBulkAttendanceModal } from '../../components/attendance/QuickBulkAttendanceModal';
 import { MonthlyHoursHub } from '../../components/attendance/MonthlyHoursHub';
 import {
   Calendar,
@@ -31,6 +33,10 @@ import {
   CheckCircle2,
   AlertCircle,
   BarChart3,
+  Sun,
+  Moon,
+  Sparkles,
+  CheckCheck,
 } from 'lucide-react';
 
 const statusLabel: Record<AttendanceStatus, string> = {
@@ -67,16 +73,23 @@ const resolveShiftTimes = (
 ) => {
   const shiftType = emp.shiftType || settings?.shiftType || 'morning';
   const shiftSettings = settings?.shifts?.[shiftType];
+  const eveningStart = shiftSettings?.workStartTime || '12:00';
+  const eveningEnd = shiftSettings?.workEndTime || '20:00';
+  const morningStart = shiftSettings?.workStartTime || '09:00';
+  const morningEnd = shiftSettings?.workEndTime || '18:00';
+
+  if (shiftType === 'evening') {
+    return {
+      shiftType: 'evening' as ShiftType,
+      scheduledStartTime: eveningStart, // Strictly 12:00 from settings
+      scheduledEndTime: eveningEnd,     // Strictly 20:00 (8:00 PM) from settings
+    };
+  }
+
   return {
-    shiftType,
-    scheduledStartTime:
-      emp.shiftStartTime ||
-      shiftSettings?.workStartTime ||
-      (shiftType === 'evening' ? '12:00' : '09:00'),
-    scheduledEndTime:
-      emp.shiftEndTime ||
-      shiftSettings?.workEndTime ||
-      (shiftType === 'evening' ? '21:00' : '18:00'),
+    shiftType: 'morning' as ShiftType,
+    scheduledStartTime: emp.shiftStartTime || morningStart,
+    scheduledEndTime: emp.shiftEndTime || morningEnd,
   };
 };
 
@@ -99,6 +112,11 @@ export const Attendance: React.FC = () => {
 
   // Delete modal
   const [deleteTarget, setDeleteTarget] = useState<AttendanceDocument | null>(null);
+
+  // Quick Bulk Attendance Modal State & Selection
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
+  const [shiftUpdatingEmpId, setShiftUpdatingEmpId] = useState<string | null>(null);
 
   // Tab State: 'daily' (Live Punch Log) vs 'monthly' (Monthly Hours & Quick Action Hub)
   const [searchParams, setSearchParams] = useSearchParams();
@@ -154,21 +172,160 @@ export const Attendance: React.FC = () => {
     ...(reason !== undefined && { reason }),
   });
 
+  // Toggle selection
+  const handleToggleSelectEmployee = (id: string) => {
+    setSelectedEmployeeIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllFiltered = () => {
+    if (selectedEmployeeIds.length === filteredEmployees.length) {
+      setSelectedEmployeeIds([]);
+    } else {
+      setSelectedEmployeeIds(filteredEmployees.map((e) => e.id));
+    }
+  };
+
+  const handleSelectUnattendedOnly = () => {
+    const attendedEmpIds = new Set(attendance.map((a) => a.employeeId));
+    const unattended = filteredEmployees
+      .filter((e) => !attendedEmpIds.has(e.id))
+      .map((e) => e.id);
+    setSelectedEmployeeIds(unattended);
+  };
+
+  // Direct Shift Switcher from Table or Card
+  const handleUpdateEmployeeShift = async (emp: EmployeeDocument, newShift: ShiftType) => {
+    if (!canEditAttendance) {
+      showToast('error', 'لا تملك صلاحية تعديل وردية الموظف');
+      return;
+    }
+    if (emp.shiftType === newShift) return;
+    setShiftUpdatingEmpId(emp.id);
+    try {
+      await dbService.updateEmployee(emp.id, { shiftType: newShift });
+
+      // If employee already has attendance record for selectedDate, update shift in record as well
+      const existingRecord = attendance.find((a) => a.employeeId === emp.id);
+      if (existingRecord) {
+        const shiftSettings = settings?.shifts?.[newShift];
+        const st =
+          emp.shiftStartTime ||
+          shiftSettings?.workStartTime ||
+          (newShift === 'evening' ? '12:00' : '09:00');
+        const et =
+          emp.shiftEndTime ||
+          shiftSettings?.workEndTime ||
+          (newShift === 'evening' ? '20:00' : '18:00');
+        const updatedAtt: AttendanceDocument = {
+          ...existingRecord,
+          shiftType: newShift,
+          scheduledStartTime: st,
+          scheduledEndTime: et,
+          updatedAt: new Date().toISOString(),
+        };
+        await dbService.recordAttendance(updatedAtt);
+      }
+
+      setEmployees((prev) =>
+        prev.map((e) => (e.id === emp.id ? { ...e, shiftType: newShift } : e))
+      );
+      if (existingRecord) {
+        setAttendance((prev) =>
+          prev.map((a) => (a.employeeId === emp.id ? { ...a, shiftType: newShift } : a))
+        );
+      }
+
+      showToast(
+        'success',
+        'تم تغيير الوردية',
+        `${emp.fullName} - ${newShift === 'evening' ? 'دوام مسائي' : 'دوام صباحي'}`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `فشل تحديث الوردية: ${msg}`);
+    } finally {
+      setShiftUpdatingEmpId(null);
+    }
+  };
+
+  // One-click Bulk Check-in for selected employees
+  const handleBulkQuickCheckIn = async () => {
+    if (!canCreateAttendance) {
+      showToast('error', 'لا تملك صلاحية تسجيل الحضور');
+      return;
+    }
+    if (selectedEmployeeIds.length === 0) return;
+
+    const targetEmployees = employees.filter((e) => selectedEmployeeIds.includes(e.id));
+    const todayStr = new Date().toISOString().split('T')[0];
+    const isToday = selectedDate === todayStr;
+    const nowIso = new Date().toISOString();
+
+    const newRecords: AttendanceDocument[] = targetEmployees.map((emp) => {
+      const { shiftType, scheduledStartTime, scheduledEndTime } = resolveShiftTimes(emp, settings);
+      const checkInIso = isToday
+        ? nowIso
+        : (() => {
+            const [year, month, day] = selectedDate.split('-').map(Number);
+            const [h, m] = (scheduledStartTime || '09:00').split(':').map(Number);
+            return new Date(year, month - 1, day, h, m, 0, 0).toISOString();
+          })();
+
+      return {
+        id: `${emp.id}_${selectedDate}`,
+        employeeId: emp.id,
+        employeeName: emp.fullName,
+        date: selectedDate,
+        checkIn: checkInIso,
+        workingHours: 0,
+        status: 'present',
+        shiftType,
+        scheduledStartTime,
+        scheduledEndTime,
+        temporaryExits: [],
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        auditTrail: [createAudit('check_in', {}, { checkIn: checkInIso, status: 'present', shiftType })],
+      };
+    });
+
+    try {
+      await dbService.recordAttendanceBatch(newRecords);
+      showToast('success', 'تم تسجيل الحضور الجماعي', `تم تحضير ${newRecords.length} موظف بنجاح`);
+      setSelectedEmployeeIds([]);
+      await fetchData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast('error', `فشل التحضير الجماعي: ${msg}`);
+    }
+  };
+
   // Direct manual actions (one-click buttons)
   const handleQuickCheckIn = async (emp: EmployeeDocument) => {
     if (!canCreateAttendance) {
       showToast('error', 'لا تملك صلاحية تسجيل الحضور');
       return;
     }
-    const nowIso = new Date().toISOString();
     const { shiftType, scheduledStartTime, scheduledEndTime } = resolveShiftTimes(emp, settings);
+    const todayStr = new Date().toISOString().split('T')[0];
+    const isToday = selectedDate === todayStr;
+    const checkInIso = isToday
+      ? new Date().toISOString()
+      : (() => {
+          const [year, month, day] = selectedDate.split('-').map(Number);
+          const [h, m] = (scheduledStartTime || '09:00').split(':').map(Number);
+          return new Date(year, month - 1, day, h, m, 0, 0).toISOString();
+        })();
 
+    const nowIso = new Date().toISOString();
     const newRecord: AttendanceDocument = {
       id: `${emp.id}_${selectedDate}`,
       employeeId: emp.id,
       employeeName: emp.fullName,
       date: selectedDate,
-      checkIn: nowIso,
+      checkIn: checkInIso,
       workingHours: 0,
       status: 'present',
       shiftType,
@@ -177,7 +334,7 @@ export const Attendance: React.FC = () => {
       temporaryExits: [],
       createdAt: nowIso,
       updatedAt: nowIso,
-      auditTrail: [createAudit('check_in', {}, { checkIn: nowIso, status: 'present', shiftType })],
+      auditTrail: [createAudit('check_in', {}, { checkIn: checkInIso, status: 'present', shiftType })],
     };
 
     try {
@@ -371,6 +528,58 @@ export const Attendance: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Top Header & Primary Actions - ALWAYS VISIBLE AT THE VERY TOP */}
+      <div className="bg-white p-4 sm:p-5 rounded-3xl border border-brand-100 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-black text-brand-950 flex items-center gap-2.5">
+            <span>سجل الدوام والتحضير اليومي</span>
+          </h1>
+          <p className="text-xs text-brand-600 mt-1">
+            توثيق الحضور والانصراف والخروج المؤقت آلياً بتقنية الـ QR أو بالتحضير السريع الجماعي
+          </p>
+        </div>
+
+        {/* Date Selector & Primary Action Buttons */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative">
+            <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-brand-600 pointer-events-none">
+              <Calendar size={16} />
+            </span>
+            <input
+              type="date"
+              className="py-2.5 pr-9 pl-4 bg-gray-50 border border-brand-200 rounded-2xl text-xs font-bold text-gray-800 focus:outline-hidden focus:ring-2 focus:ring-brand-500 shadow-xs cursor-pointer"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+            />
+          </div>
+
+          {/* Big Prominent Quick Attendance Button */}
+          <button
+            type="button"
+            onClick={() => setIsBulkModalOpen(true)}
+            className="flex-1 sm:flex-initial py-2.5 px-5 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-700/25 hover:shadow-xl transition-all cursor-pointer active:scale-95 border-2 border-emerald-400/50"
+          >
+            <Sparkles size={18} className="text-emerald-200 animate-bounce" />
+            <span>⚡ حضور سريع (تحضير جماعي)</span>
+            {absentCount > 0 && (
+              <span className="px-2.5 py-0.5 rounded-full bg-white text-emerald-800 text-[11px] font-black shadow-xs">
+                {absentCount} لم يحضروا
+              </span>
+            )}
+          </button>
+
+          {/* Big QR Scanner Button */}
+          <button
+            type="button"
+            onClick={() => setIsQrScannerOpen(true)}
+            className="flex-1 sm:flex-initial py-2.5 px-4 rounded-2xl bg-gradient-to-r from-brand-950 via-brand-900 to-brand-950 text-gold-400 hover:text-white border border-gold-400/40 font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer active:scale-95"
+          >
+            <QrCode size={17} className="text-gold-400" />
+            <span>ماسح الـ QR</span>
+          </button>
+        </div>
+      </div>
+
       {/* Top Tab Switcher: Mobile First Segmented Control */}
       <div className="flex items-center gap-2 p-1.5 bg-brand-50/70 rounded-2xl w-full sm:w-fit border border-brand-200/50 shadow-xs">
         <button
@@ -383,7 +592,7 @@ export const Attendance: React.FC = () => {
           }`}
         >
           <Calendar size={15} />
-          <span>سجل التحضير اليومي (QR)</span>
+          <span>سجل التحضير اليومي والجدول</span>
         </button>
 
         <button
@@ -404,42 +613,50 @@ export const Attendance: React.FC = () => {
         <MonthlyHoursHub />
       ) : (
         <>
-          {/* Top Header & Quick Actions */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h1 className="text-xl sm:text-2xl font-extrabold text-brand-950 flex items-center gap-2.5">
-                <span>سجل الدوام والتحضير اليومي</span>
-              </h1>
-          <p className="text-xs text-brand-600 mt-1">
-            توثيق الحضور والانصراف والخروج المؤقت آلياً بتقنية الـ QR أو يدوياً
-          </p>
-        </div>
 
-        {/* Date Selector & Primary Action Button */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative">
-            <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-brand-600 pointer-events-none">
-              <Calendar size={16} />
+
+      {/* Floating Sticky Bulk Actions Toolbar */}
+      {selectedEmployeeIds.length > 0 && (
+        <div className="sticky top-3 z-30 bg-gradient-to-r from-brand-950 via-brand-900 to-brand-950 text-white p-3.5 sm:p-4 rounded-2xl shadow-2xl border border-gold-400/40 flex flex-wrap items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center gap-3">
+            <span className="w-9 h-9 rounded-xl bg-gold-400/20 text-gold-300 flex items-center justify-center font-black text-sm border border-gold-400/30">
+              {selectedEmployeeIds.length}
             </span>
-            <input
-              type="date"
-              className="py-2.5 pr-9 pl-4 bg-white border border-brand-100 rounded-2xl text-xs font-bold text-gray-800 focus:outline-hidden focus:ring-2 focus:ring-brand-500 shadow-xs cursor-pointer"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-            />
+            <div className="text-xs">
+              <span className="font-bold text-white text-sm">تم تحديد {selectedEmployeeIds.length} موظف</span>
+              <span className="text-brand-300 block text-[11px] mt-0.5">تاريخ التحضير: {selectedDate}</span>
+            </div>
           </div>
 
-          {/* Big QR Scanner Button (Touch-Friendly Mobile First) */}
-          <button
-            type="button"
-            onClick={() => setIsQrScannerOpen(true)}
-            className="flex-1 sm:flex-initial py-2.5 px-5 rounded-2xl bg-gradient-to-r from-brand-950 via-brand-900 to-brand-950 text-gold-400 hover:text-white border border-gold-400/40 font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-brand-950/20 hover:shadow-xl transition-all cursor-pointer active:scale-95"
-          >
-            <QrCode size={18} className="text-gold-400 animate-pulse" />
-            <span>ماسح الـ QR السريع</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleBulkQuickCheckIn}
+              className="py-2 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
+            >
+              <CheckCheck size={14} />
+              <span>تحضير فوري للمحددين</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsBulkModalOpen(true)}
+              className="py-2 px-3.5 rounded-xl bg-gradient-to-r from-gold-500 to-amber-500 hover:from-gold-600 hover:to-amber-600 text-brand-950 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
+            >
+              <Sparkles size={14} />
+              <span>تخصيص الوردية والتوقيت بالمودال</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedEmployeeIds([])}
+              className="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-gray-300 font-bold text-xs transition cursor-pointer"
+            >
+              إلغاء التحديد
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Stats Cards Row (Mobile Grid) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -484,9 +701,9 @@ export const Attendance: React.FC = () => {
         </div>
       </div>
 
-      {/* Search Input Filter */}
-      <div className="bg-white p-3.5 rounded-2xl border border-brand-100 shadow-xs">
-        <div className="relative">
+      {/* Search Input Filter & Quick Selection Shortcuts */}
+      <div className="bg-white p-3.5 rounded-2xl border border-brand-100 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="relative flex-1">
           <span className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 pointer-events-none">
             <Search size={16} />
           </span>
@@ -497,6 +714,35 @@ export const Attendance: React.FC = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full py-2.5 pr-10 pl-4 bg-gray-50/70 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-brand-500 focus:bg-white text-right transition-all"
           />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsBulkModalOpen(true)}
+            className="py-2 px-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95 border border-emerald-400/40"
+          >
+            <Sparkles size={14} className="text-emerald-200 animate-pulse" />
+            <span>⚡ حضور سريع وجماعي</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSelectAllFiltered}
+            className="py-2 px-3 rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold text-xs transition cursor-pointer"
+          >
+            {selectedEmployeeIds.length === filteredEmployees.length && filteredEmployees.length > 0
+              ? 'إلغاء تحديد الكل'
+              : `تحديد الكل (${filteredEmployees.length})`}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSelectUnattendedOnly}
+            className="py-2 px-3 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs transition cursor-pointer"
+          >
+            تحديد غير المحضرين ({absentCount})
+          </button>
         </div>
       </div>
 
@@ -520,7 +766,7 @@ export const Attendance: React.FC = () => {
           <div className="block sm:hidden space-y-3">
             {filteredEmployees.map((emp) => {
               const rec = attendance.find((a) => a.employeeId === emp.id);
-              const shiftLabel = emp.shiftType === 'evening' ? 'مسائي' : 'صباحي';
+              const isSelected = selectedEmployeeIds.includes(emp.id);
               const { scheduledStartTime: st, scheduledEndTime: et } = resolveShiftTimes(emp, settings);
               const shiftTimes = `${st} - ${et}`;
               const exitsCount = rec?.temporaryExits?.length || 0;
@@ -528,11 +774,19 @@ export const Attendance: React.FC = () => {
               return (
                 <div
                   key={emp.id}
-                  className="bg-white rounded-2xl border border-brand-100 p-4 shadow-xs space-y-3"
+                  className={`bg-white rounded-2xl border p-4 shadow-xs space-y-3 transition-all ${
+                    isSelected ? 'border-brand-500 ring-2 ring-brand-500/20 bg-brand-50/20' : 'border-brand-100'
+                  }`}
                 >
-                  {/* Top row: Avatar + Name + Status */}
+                  {/* Top row: Checkbox + Avatar + Name + Status */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2.5 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleToggleSelectEmployee(emp.id)}
+                        className="w-4 h-4 rounded text-brand-900 focus:ring-brand-500 cursor-pointer accent-brand-900 shrink-0"
+                      />
                       <div className="w-10 h-10 rounded-xl bg-brand-900 text-gold-400 flex items-center justify-center font-bold text-sm shrink-0 border border-gold-400/30">
                         {emp.fullName.charAt(0)}
                       </div>
@@ -541,7 +795,7 @@ export const Attendance: React.FC = () => {
                         <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
                           <span>{emp.employeeNo}</span>
                           <span>•</span>
-                          <span className="text-brand-700 font-semibold">{shiftLabel} ({shiftTimes})</span>
+                          <span>{emp.jobTitle}</span>
                         </div>
                       </div>
                     </div>
@@ -553,6 +807,48 @@ export const Attendance: React.FC = () => {
                     >
                       {rec ? statusLabel[rec.status] : 'لم يحضر'}
                     </span>
+                  </div>
+
+                  {/* Interactive Shift Selector Row (Mobile) */}
+                  <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-gray-50/80 border border-gray-100">
+                    <div className="flex items-center gap-1 text-[11px] font-bold text-gray-700">
+                      <span>الوردية:</span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <div className="inline-flex items-center p-0.5 rounded-lg bg-gray-200/60 border border-gray-200">
+                        <button
+                          type="button"
+                          disabled={!canEditAttendance || shiftUpdatingEmpId === emp.id}
+                          onClick={() => handleUpdateEmployeeShift(emp, 'morning')}
+                          className={`flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                            emp.shiftType === 'evening'
+                              ? 'text-gray-600 hover:text-gray-900'
+                              : 'bg-amber-500 text-white shadow-xs'
+                          }`}
+                        >
+                          <Sun size={10} />
+                          <span>صباحي</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!canEditAttendance || shiftUpdatingEmpId === emp.id}
+                          onClick={() => handleUpdateEmployeeShift(emp, 'evening')}
+                          className={`flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                            emp.shiftType === 'evening'
+                              ? 'bg-indigo-600 text-white shadow-xs'
+                              : 'text-gray-600 hover:text-gray-900'
+                          }`}
+                        >
+                          <Moon size={10} />
+                          <span>مسائي</span>
+                        </button>
+                      </div>
+
+                      <span className="text-[10px] text-gray-500 font-mono" dir="ltr">
+                        {shiftTimes}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Time Summary Row */}
@@ -664,8 +960,17 @@ export const Attendance: React.FC = () => {
               <table className="w-full text-right border-collapse">
                 <thead>
                   <tr className="border-b border-brand-100 bg-brand-50/40 text-brand-900 font-bold text-xs">
+                    <th className="p-4 w-12 text-center">
+                      <input
+                        type="checkbox"
+                        checked={filteredEmployees.length > 0 && selectedEmployeeIds.length === filteredEmployees.length}
+                        onChange={handleSelectAllFiltered}
+                        className="w-4 h-4 rounded text-brand-900 focus:ring-brand-500 cursor-pointer accent-brand-900"
+                        title="تحديد الكل"
+                      />
+                    </th>
                     <th className="p-4">الموظف</th>
-                    <th className="p-4">الجدول المعتمد</th>
+                    <th className="p-4">الجدول المعتمد (الوردية)</th>
                     <th className="p-4">وقت الحضور</th>
                     <th className="p-4">الخروج المؤقت</th>
                     <th className="p-4">وقت الانصراف</th>
@@ -677,13 +982,28 @@ export const Attendance: React.FC = () => {
                 <tbody className="divide-y divide-brand-50 text-xs">
                   {filteredEmployees.map((emp) => {
                     const rec = attendance.find((a) => a.employeeId === emp.id);
-                    const shiftLabel = emp.shiftType === 'evening' ? 'مسائي' : 'صباحي';
+                    const isSelected = selectedEmployeeIds.includes(emp.id);
                     const { scheduledStartTime: st2, scheduledEndTime: et2 } = resolveShiftTimes(emp, settings);
                     const shiftTimes = `${st2} - ${et2}`;
                     const exits = rec?.temporaryExits || [];
 
                     return (
-                      <tr key={emp.id} className="hover:bg-brand-50/20 transition-all">
+                      <tr
+                        key={emp.id}
+                        className={`transition-all ${
+                          isSelected ? 'bg-brand-50/40' : 'hover:bg-brand-50/20'
+                        }`}
+                      >
+                        {/* Multi-select checkbox */}
+                        <td className="p-4 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelectEmployee(emp.id)}
+                            className="w-4 h-4 rounded text-brand-900 focus:ring-brand-500 cursor-pointer accent-brand-900"
+                          />
+                        </td>
+
                         {/* Employee Details */}
                         <td className="p-4">
                           <div className="flex items-center gap-3">
@@ -697,11 +1017,43 @@ export const Attendance: React.FC = () => {
                           </div>
                         </td>
 
-                        {/* Schedule from Employee */}
+                        {/* Schedule from Employee - Interactive Shift Switcher */}
                         <td className="p-4">
-                          <div className="space-y-0.5">
-                            <span className="font-bold text-brand-950 text-[11px] block">{shiftLabel}</span>
-                            <span className="text-[10px] text-gray-500 font-mono" dir="ltr">{shiftTimes}</span>
+                          <div className="space-y-1.5">
+                            <div className="inline-flex items-center p-0.5 rounded-xl bg-gray-100 border border-gray-200">
+                              <button
+                                type="button"
+                                disabled={!canEditAttendance || shiftUpdatingEmpId === emp.id}
+                                onClick={() => handleUpdateEmployeeShift(emp, 'morning')}
+                                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                                  emp.shiftType === 'evening'
+                                    ? 'text-gray-500 hover:text-gray-800'
+                                    : 'bg-amber-500 text-white shadow-xs'
+                                }`}
+                                title="تغيير الدوام إلى صباحي"
+                              >
+                                <Sun size={11} />
+                                <span>صباحي</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={!canEditAttendance || shiftUpdatingEmpId === emp.id}
+                                onClick={() => handleUpdateEmployeeShift(emp, 'evening')}
+                                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                                  emp.shiftType === 'evening'
+                                    ? 'bg-indigo-600 text-white shadow-xs'
+                                    : 'text-gray-500 hover:text-gray-800'
+                                }`}
+                                title="تغيير الدوام إلى مسائي"
+                              >
+                                <Moon size={11} />
+                                <span>مسائي</span>
+                              </button>
+                            </div>
+                            <span className="text-[10px] text-gray-500 font-mono block" dir="ltr">
+                              {shiftTimes}
+                            </span>
                           </div>
                         </td>
 
@@ -852,6 +1204,22 @@ export const Attendance: React.FC = () => {
       )}
         </>
       )}
+
+      {/* Quick Bulk Attendance Modal */}
+      <QuickBulkAttendanceModal
+        isOpen={isBulkModalOpen}
+        onClose={() => setIsBulkModalOpen(false)}
+        selectedDate={selectedDate}
+        employees={employees}
+        attendance={attendance}
+        preSelectedEmployeeIds={selectedEmployeeIds}
+        settings={settings}
+        onSuccess={async () => {
+          setSelectedEmployeeIds([]);
+          await fetchData();
+        }}
+      />
+
 
       {/* QR Scanner Component Modal */}
       <QrAttendanceScanner
